@@ -179,7 +179,7 @@ void usage(char *name){
 
 void parseArg(int argc, char *argv[]){
 	memset(&globalArgs, 0, sizeof(globalArgs));
-	
+
 	int c;
 	while (1){
 		static struct option long_options[] = {
@@ -191,7 +191,7 @@ void parseArg(int argc, char *argv[]){
 			{"listen",  required_argument, 0, 'l'},
 			{0, 0, 0, 0}
 		};
-		
+
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
@@ -201,9 +201,9 @@ void parseArg(int argc, char *argv[]){
 		/* Detect the end of the options. */
 		if (c == -1)
 			break;
-		
+
 		char *port;
-		
+
 		switch (c)	{
 			case 0:
 				/* If this option set a flag, do nothing else now. */
@@ -221,16 +221,16 @@ void parseArg(int argc, char *argv[]){
 				break;
 
 			case 's':
-				
+
 				port = strchr(optarg, ':');
 				if ( port == NULL ){
 					usage(argv[0]);
-					exit(1);					
+					exit(1);
 				}
 				*port = 0; port++;
 				globalArgs.sockshost = optarg;
 				globalArgs.socksport = atoi(port);
-				/*printf("Connect trought socks %s:%d\n", 
+				/*printf("Connect trought socks %s:%d\n",
 					globalArgs.sockshost, globalArgs.socksport);*/
 				break;
 
@@ -254,30 +254,30 @@ void parseArg(int argc, char *argv[]){
 				usage(argv[0]);
 				exit(1);
 				break;
-				
+
 			case 'h':
 				usage(argv[0]);
 				exit(1);
 				break;
-				
+
 			default:
 				abort ();
 		}
 	}
-	
+
 	if (argc - optind == 2 ){
 		globalArgs.host = argv[optind++];
 		globalArgs.port = atoi(argv[optind++]);
 	}else if(globalArgs.listen != 0){
-		
+
 	}else{
 		usage(argv[0]);
-		exit(1);		
+		exit(1);
 	}
-	
+
 	if ( globalArgs.sockshost == NULL || globalArgs.socksport == 0 ){
 		usage(argv[0]);
-		exit(1);		
+		exit(1);
 	}
 }
 

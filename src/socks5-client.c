@@ -42,6 +42,7 @@ void dispatch_client (Client *c){
 		case E_R_REQ_ACK: read_request_ack(c); break;
 		case E_SEND : write_client(c); break;
 		case E_RECV : read_client(c); break;
+		case E_REPLY: (c->buf_stream_w == 1) ? write_client(c) : read_client(c);
 		default : break;
 	}
 }
@@ -66,14 +67,14 @@ void write_version(Client *c){
 		Socks5Version req;
 		req.ver = SOCKS5_V;
 		req.nmethods = 0x02;
-		memcpy(c->req, &req, sizeof(Socks5Version));
+		memcpy(c->req, &req, 2);
 
 		/* Support no-auth method and username/password */
-		*(c->req + sizeof(Socks5Version)) = 0x00; /* No auth */
-		*(c->req + sizeof(Socks5Version)+1) = 0x02; /* Auth username/password */
+		*(c->req + 2) = 0x00; /* No auth */
+		*(c->req + 2+1) = 0x02; /* Auth username/password */
 
 		/* Fix buffer size we send 2 methods */
-		c->req_b = sizeof(Socks5Version) + 2;
+		c->req_b = 2 + 2;
 	}
 	
     if (c->req_b-c->req_a > 0) {
@@ -108,7 +109,7 @@ void read_version_ack(Client *c){
     
     /* Warm if the buffer is full, the third parameter read goes to 0,
      * so read return 0 as a disconnection */
-    TRACE(L_DEBUG, "client: read version ...");
+    TRACE(L_DEBUG, "client: read version ack ...");
     k = read (c->soc_stream, 
               c->req+c->req_b, 
               sizeof(c->req)-c->req_b-1);
@@ -150,8 +151,14 @@ void read_version_ack(Client *c){
 		/* Change state in function of the method */
 		if ( res.method == 0x02 )
 			c->stateC = E_W_AUTH;
-		else
+		/* Mode dynamic used by ssocks only */
+		else if ( c->mode == M_DYNAMIC ){
+			/* Change state to recv on stateC and state and put flush of buf stream */
+			c->stateC = E_REPLY; c->state = E_RECV; c->buf_stream_w = 1;
+		}else{
+			/* Change state to write request */
 			c->stateC = E_W_REQ;
+		}
 	}
     return;	
 }
@@ -178,8 +185,14 @@ void write_auth(Client *c){
 		 * config struct associate to the client.
 		 * Can be NULL error we need it */
 		Socks5Auth req;
-		char *uname = ((ConfigClient*)c->config)->uname;
-		char *passwd = ((ConfigClient*)c->config)->passwd;
+		char *uname, *passwd;
+		if (c->mode == M_DYNAMIC){
+			uname = ((ConfigDynamic*)c->config)->uname;
+			passwd = ((ConfigDynamic*)c->config)->passwd;
+		}else{
+			uname = ((ConfigClient*)c->config)->uname;
+			passwd = ((ConfigClient*)c->config)->passwd;
+		}
 		
 		if (uname == NULL || passwd == NULL){
 			ERROR(L_NOTICE, "client: need a login/password");
@@ -281,7 +294,7 @@ void read_auth_ack(Client *c){
 		/* Mode dynamic used by ssocks only */
 		if ( c->mode == M_DYNAMIC ){
 			/* Change state to recv on stateC and state and put flush of buf down */
-			c->stateC = E_RECV; c->state = E_RECV; c->buf_stream_w = 1;
+			c->stateC = E_REPLY; c->state = E_RECV; c->buf_stream_w = 1;
 		}else{
 			/* Change state to write request */
 			c->stateC = E_W_REQ;

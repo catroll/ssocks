@@ -162,7 +162,8 @@ void read_version (Client *c){
 		 * */
 		for (i=0; i <  req.nmethods; ++i){
 			if ( req.methods[i] == 0x00){
-				if ( globalArgsServer.guest != 0 ){
+				/* In ssocks ( DYNAMIC_MODE no globalArgsServer */
+				if ( c->mode == M_DYNAMIC || globalArgsServer.guest != 0 ){
 					ok = 1;
 					c->auth = req.methods[i];
 					break;
@@ -585,10 +586,8 @@ void read_request (Client *c){
  */
 void read_request_dynamic (Client *c){
     int k;
-    
 
-
-	TRACE(L_DEBUG, "server [%d]: read bind client request ...", c->id);
+	TRACE(L_DEBUG, "server [%d]: read dynamic client request ...", c->id);
 	k = read (c->soc, 
 			  c->buf_stream+c->buf_stream_b, 
 			  sizeof(c->buf_stream)-c->buf_stream_b-1);
@@ -602,14 +601,15 @@ void read_request_dynamic (Client *c){
    
     c->buf_stream_b += k;
     if ( c->buf_stream_b-c->buf_stream_a >= (int)(sizeof(Socks5Req)  + 4) ){
-		TRACE(L_DEBUG, "server [%d]: testing bind client request ...", c->id);
+		TRACE(L_DEBUG, "server [%d]: testing dynamic client request ...", c->id);
 		
 
 		if ( c->config == NULL ){
 			ERROR(L_NOTICE, "server [%d]: no config", c->id);
 			disconnection (c); return;
 		}
-		TRACE(L_DEBUG, "server [%d]: try to listen on %s:%d ...",c->id,
+
+		TRACE(L_DEBUG, "server [%d]: try to connect on %s:%d ...",c->id,
 			((ConfigDynamic*)c->config)->host, 
 			((ConfigDynamic*)c->config)->port);
 		
@@ -623,6 +623,7 @@ void read_request_dynamic (Client *c){
 		c->req_b = 0;
 
 		c->state = E_WAIT;
+		//c->stateC = E_W_VER_ACK;
 	}
     return;
 }

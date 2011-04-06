@@ -53,9 +53,12 @@ enum {
 
 	E_RECV,
 	E_SEND,
+	E_REPLY,
 
 	E_WAIT
 };
+
+#pragma pack(push, 2) /* Need to change alignment 4 -> 2 */
 
  /* Socks5 version packet */
 typedef struct {
@@ -97,7 +100,7 @@ typedef struct {
 
 /* Socks5 request packet ACK
  * Need to change alignment 4 -> 2  else sizeof 12 instead of 10 */
-#pragma pack(push, 2)
+
 typedef struct {
 	char ver;
 	char rep;
@@ -106,14 +109,17 @@ typedef struct {
 	struct in_addr bndaddr; /* uint32_t */
 	uint16_t  bndport;
 } Socks5ReqACK;
-#pragma pack(pop)
+
 
 /* Configuration dynamic for ssocks */
 typedef struct {
 	char *host;
 	int port;
+	char *uname;
+	char *passwd;
 } ConfigDynamic;
 
+#pragma pack(pop) /* End of change alignment */
 
 
 void read_server (Client *c);

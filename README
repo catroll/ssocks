@@ -20,11 +20,13 @@ TODO:
 	- GSSAPI auth support ( maybe )
 	- Set number of client max ( actually 128 is in client.h MAXCLI var )
 	- Add --pid-file option to server 
+	- ssocks bind localhost, not all
 	
 ------------------------------------------------------------------------
  - nsocks is a netcat like through a socks5 (usefull to test socks server)
  - ssocksd is the socks5 server
- - ssocks is a tool under dev
+ - ssocks is a socks5 relay, it run a socks server on your localhost interface, and
+ relay all data to the server specified in parameter (works but under dev)
  - /etc/ssocksd.conf is server configuration file
  - /etc/ssocksd.auth is password file
  - /var/log/ssocksd.log is default log (specified in configuration file)

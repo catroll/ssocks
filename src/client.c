@@ -114,13 +114,21 @@ void init_select_dynamic (int soc_ec, Client *tc, int *maxfd,
     *maxfd = soc_ec;
     for (nc = 0; nc < MAXCLI; nc++){
         if (tc[nc].soc != -1) {
-			if (tc[nc].state == E_R_VER
-					|| tc[nc].state == E_R_REQ
-					|| tc[nc].state == E_R_AUTH ); /* Do nothing */
-			else if (tc[nc].buf_client_w == 1){
+        	if (tc[nc].state == E_R_VER
+				|| tc[nc].state == E_R_REQ
+				|| tc[nc].state == E_R_AUTH){
+        		FD_SET (tc[nc].soc, set_read);
+        	/* Write flag on add in set_write */
+        	}else if (tc[nc].buf_client_w == 1
+        			|| (tc[nc].req_b - tc[nc].req_a) > 0){
 				FD_SET (tc[nc].soc, set_write);
+			/* if we don't write we can read if we have space */
+			}else if (tc[nc].state == E_WAIT){
+
+			}else if (tc[nc].buf_stream_b <
+					(int)(sizeof(tc[nc].buf_stream) - 1)){
+				FD_SET (tc[nc].soc, set_read);
 			}
-			FD_SET (tc[nc].soc, set_read);
 			
             if (tc[nc].soc > *maxfd) *maxfd = tc[nc].soc;
         }
@@ -128,10 +136,10 @@ void init_select_dynamic (int soc_ec, Client *tc, int *maxfd,
 			FD_SET (tc[nc].soc_stream, set_read);
 			if (tc[nc].soc_stream > *maxfd) *maxfd = tc[nc].soc_stream;
 			
-			if ( tc[nc].stateC == E_W_VER_ACK
-					|| tc[nc].stateC == E_W_AUTH_ACK
-					|| tc[nc].stateC == E_W_REQ_ACK
-					|| (tc[nc].stateC == E_RECV && tc[nc].buf_stream_w == 1) ){
+			if ( tc[nc].stateC == E_W_VER
+					|| tc[nc].stateC == E_W_AUTH
+					|| tc[nc].stateC == E_W_REQ
+					|| (tc[nc].stateC == E_REPLY && tc[nc].buf_stream_w == 1) ){
 				FD_SET (tc[nc].soc_stream, set_write);
 				if (tc[nc].soc_stream > *maxfd) *maxfd = tc[nc].soc_stream;
 			}

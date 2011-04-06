@@ -27,44 +27,74 @@
  */
 
 #include "bor-util.h"
-#include "net-util.h"
 #include "bor-timer.h"
+#include "net-util.h"
+#include "output-util.h"
 
 #include "socks5-client.h"
 #include "socks5-server.h"
 #include "socks5-common.h"
 
+#include <config.h>
 #include <getopt.h>
 
 
 #define PORT 1080
 
+struct globalArgs_t {
+	char *host;				// -h option
+	unsigned int port;		// -p option
+	unsigned int listen;	// -l option
+	unsigned int verbosity;	// -v
+	unsigned int background;// -b
+
+	char *uname;			// -u option
+	char *passwd;			// -p option
+
+	char *sockshost;		// -s host:port
+	int socksport;
+} globalArgs;
+
 int boucle_princ = 1;
-void capte_fin (int sig)
-{
-    printf ("Serveur: signal %d capté\n", sig);
+void capte_fin (int sig){
+    TRACE(L_VERBOSE, "server: signal %d caught\n", sig);
     boucle_princ = 0;
 }
-
+/*
+ * TODO: Bind localhost not 0.0.0.0
+ */
 void usage(char *name){
-	printf("Server Socks5 v%s\n", "0.1");
-	printf("Options:\n");
-	printf("\t--verbose (-v) set verbose level\n");
-	printf("------------------------------------------------------------\n");
-	printf("\t--port <port> (-p port) set verbose mode\n");
-	printf("\t--host <host> (-h port) set verbose mode\n");
-	printf("------------------------------------------------------------\n");
+	printf("sSocks Socks5 Server Relay v%s\n", PACKAGE_VERSION);
+	printf("Run a socks server on your localhost interface, and\n");
+	printf("relay all data to the server specified in --socks\n");
+	printf("Used to bypass browser limitation with authentication\n");
 	printf("Usage:\n");
-	printf("\t%s --port 1080 --host localhost\n", name);
+	printf("\t%s --socks socksserv.com:1080\n", name);
+	printf("\t%s --socks localhost:1080 --listen 1088\n", name);
+	printf("\t%s --socks socksserv.com:1080 --uname admin --passwd abcde\n", name);
+	printf("\t%s -s socksserv.com:1080 -u admin -p abcde -l 1080 -b\n", name);
+	printf("Options:\n");
+	printf("\t--verbose (increase verbose level)\n\n");
+	printf("\t--socks {host:port}\n");
+	printf("\t--uname {uname}\n");
+	printf("\t--passwd {passwd}\n");
+	printf("\t--listen {port}\n");
+	printf("\t--background\n");
+	printf("\n");
+	printf("Bug report %s\n", PACKAGE_BUGREPORT);
 }
 
-void server(char *sockshost, int socksport, int port){
+void server(char *sockshost, int socksport, int port,
+		char *uname, char *passwd){
     int soc_ec = -1, maxfd, res, nc;  
     Client tc[MAXCLI]; 
     ConfigDynamic config;
+
     config.host = sockshost;
     config.port = socksport;
-    
+    config.uname = uname;
+    config.passwd = passwd;
+
     fd_set set_read;
     fd_set set_write;
     
@@ -74,6 +104,14 @@ void server(char *sockshost, int socksport, int port){
     soc_ec = new_listen_socket (port, MAXCLI); 
     if (soc_ec < 0) goto fin_serveur;
     
+	if ( globalArgs.background == 1 ){
+		TRACE(L_NOTICE, "server: background ...");
+		if ( daemon(0, 0) != 0 ){
+			perror("daemon");
+			exit(1);
+		}
+	}
+
     bor_signal (SIGINT, capte_fin, SA_RESTART);
     
     while (boucle_princ) {
@@ -101,64 +139,124 @@ void server(char *sockshost, int socksport, int port){
 			}
                 
         } else if ( res == 0){
-            /* Client timeout
-            int handle = bor_timer_handle();
-            for (nc = 0; nc < MAXCLI; nc++)
-                if (tc[nc].handle == handle){
-                    printf("Serveur [%d]: timeout\n", nc);
-                    disconnection (&tc[nc]);
-                }
-            */
+            /* If timeout was set in select and expired */
         }else if (res < 0) { 
-            if (errno == EINTR) ; /* Signal reçu, on ne fait rien */
+            if (errno == EINTR) ;  /* Received signal, it does nothing */
             else { perror ("select"); goto fin_serveur; }
         }
     }   
 
 fin_serveur: 
-    printf ("Serveur: closing sockets ...\n");
-    //fclose (stdout); 
-    //fclose (stderr); 
+    printf ("Server: closing sockets ...\n");
+
     if (soc_ec != -1) close (soc_ec); 
     for (nc = 0; nc < MAXCLI; nc++) raz_client (&tc[nc]);
 }
 
 
+void parseArg(int argc, char *argv[]){
+	memset(&globalArgs, 0, sizeof(globalArgs));
 
+	int c;
+	while (1){
+		static struct option long_options[] = {
+			{"help",    no_argument,       0, 'h'},
+			{"verbose", no_argument,       0, 'v'},
+			{"background", no_argument,    0, 'b'},
+			{"socks",   required_argument, 0, 's'},
+			{"uname",   required_argument, 0, 'u'},
+			{"passwd",  required_argument, 0, 'p'},
+			{"listen",  required_argument, 0, 'l'},
+			{0, 0, 0, 0}
+		};
 
+		/* getopt_long stores the option index here. */
+		int option_index = 0;
 
-void unit_creer_socket_with_socks(){
-	int soc, k;
-	char buf[4096];
-	char *host = "dedi.codsec.com";
-	char *script = "~y0ug/";
-	char *uname = "y0ug";
-	char *passwd = "1234";
-	
-	soc = new_socket_with_socks("localhost", 1080, host, 80, uname, passwd, 0);
-	if ( soc < 0 ){
-		fprintf(stderr, "test: connexion error\n");
+		c = getopt_long (argc, argv, "h?bvs:u:p:l:",
+					long_options, &option_index);
+
+		/* Detect the end of the options. */
+		if (c == -1)
+			break;
+
+		char *port;
+
+		switch (c)	{
+			case 0:
+				/* If this option set a flag, do nothing else now. */
+				if (long_options[option_index].flag != 0)
+					break;
+				printf ("option %s", long_options[option_index].name);
+				if (optarg)
+					printf (" with arg %s", optarg);
+				printf ("\n");
+				break;
+
+			case 'v':
+				//globalArgs.verbosity++;
+				verbosity++;
+				break;
+
+			case 'b':
+				globalArgs.background = 1;
+				break;
+
+			case 's':
+
+				port = strchr(optarg, ':');
+				if ( port == NULL ){
+					usage(argv[0]);
+					exit(1);
+				}
+				*port = 0; port++;
+				globalArgs.sockshost = optarg;
+				globalArgs.socksport = atoi(port);
+				/*printf("Connect trought socks %s:%d\n",
+					globalArgs.sockshost, globalArgs.socksport);*/
+				break;
+
+			case 'u':
+				/* printf("Username: %s\n", optarg); */
+				globalArgs.uname = optarg;
+				break;
+
+			case 'p':
+				/* printf("Passwd: %s\n", optarg); */
+				globalArgs.passwd = optarg;
+				break;
+
+			case 'l':
+				/* printf("Listening on port: %d\n", atoi(optarg)); */
+				globalArgs.listen = atoi(optarg);
+				break;
+
+			case '?':
+				/* getopt_long already printed an error message. */
+				usage(argv[0]);
+				exit(1);
+				break;
+
+			case 'h':
+				usage(argv[0]);
+				exit(1);
+				break;
+
+			default:
+				abort ();
+		}
+	}
+
+	if ( globalArgs.sockshost == NULL || globalArgs.socksport == 0 ){
+		usage(argv[0]);
 		exit(1);
 	}
-	
-	snprintf(buf, sizeof(buf), "GET /%s HTTP/1.1\nHost: %s\n\n", script, host);
-	k = write(soc, buf, strlen(buf));
-	if ( k<0 ){ perror("write"); close(soc); exit(1); }
-	printf("test: envoié %d octets\n", k);
-	k = read(soc, buf, sizeof(buf)-1);
-	if ( k<0 ){ perror("read"); close(soc); exit(1); }
-	if ( k == 0 ) { fprintf(stderr,"test: deconnexion read 0\n"); close(soc); exit(1); }
-	buf[k] = 0;
-	printf("test: reçu %d octets\n", k);
-	printf("%s", buf);
-	
-	close(soc);	
 }
 
-/*int main (int argc, char *argv[]){*/
-int main (){
-	server("localhost", 1080, 1088);
-	/*unit_creer_socket_with_socks();*/
 
+int main (int argc, char *argv[]){
+	parseArg(argc, argv);
+	server(globalArgs.sockshost, globalArgs.socksport, globalArgs.listen,
+			globalArgs.uname, globalArgs.passwd);
 	exit(0);
 }
