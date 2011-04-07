@@ -41,6 +41,10 @@
 #include <unistd.h>
 #include <config.h>
 
+#ifdef HAVE_LIBSSL
+	#include <openssl/ssl.h>
+#endif
+
 #define DEFAULT_PORT 1080
 #define PID_FILE "/var/run/ssocksd.pid"
 
@@ -197,6 +201,13 @@ void parseArg(int argc, char *argv[]){
 	}else{
 		TRACE(L_NOTICE, "warning: no authentication enable");
 	}
+
+#ifdef HAVE_LIBSSL
+	if (globalArgsServer.ssl == 1){
+		SSL_load_error_strings();  /* readable error messages */
+		SSL_library_init();        /* initialize library */
+	}
+#endif
 
 	verbosity = globalArgsServer.verbosity;
 
