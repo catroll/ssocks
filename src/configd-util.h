@@ -28,6 +28,8 @@
 #ifndef CONFIGD_UTIL__H
 #define CONFIGD_UTIL__H
 
+#include <config.h>
+
 struct globalArgsServer_t {
 	char fileauth[255];				// -a option
 	char fileconfig[255];			// -f option
@@ -35,6 +37,9 @@ struct globalArgsServer_t {
 	unsigned int port;			// -p option
 	unsigned int verbosity;		// -v option
 	unsigned int daemon;		// -d option
+#ifdef HAVE_LIBSSL
+	unsigned int ssl;			// -s option
+#endif
 	unsigned int guest;
 	char **inputFiles;			// input files
 	int numInputFiles;			// # of input files

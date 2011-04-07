@@ -50,6 +50,8 @@ void capte_fin (int sig){
     boucle_princ = 0;
 }
 
+/* TODO: Add --pid-file option to server
+ */
 void usage(char *name){
 	printf("ssockd - Server Socks5 v%s\n", PACKAGE_VERSION);
 
@@ -59,6 +61,9 @@ void usage(char *name){
 	printf("\t%s -vv\n", name);
 	printf("\n");
 	printf("Options:\n");
+#ifdef HAVE_LIBSSL
+	printf("\t--ssl      enable secure socks5 protocol\n");
+#endif
 	printf("\t--daemon   daemon mode (background)\n");
 	printf("\t--verbose  increase verbose level\n\n");
 	printf("\t--port {port}  listening port (default 1080)\n");
@@ -69,8 +74,6 @@ void usage(char *name){
 	printf("Bug report %s\n", PACKAGE_BUGREPORT);
 }
 
-/* TODO: Add --pid-file option to server
- */
 void parseArg(int argc, char *argv[]){
 	int c;
 	
@@ -80,12 +83,20 @@ void parseArg(int argc, char *argv[]){
 	globalArgsServer.port = DEFAULT_PORT;
 	globalArgsServer.verbosity = 0;
 	globalArgsServer.guest = 1;
+
+#ifdef HAVE_LIBSSL
+	globalArgsServer.ssl = 0;
+#endif
+
 	
 	while (1){
 		static struct option long_options[] = {
 			{"help", no_argument,       0, 'h'},
 			{"verbose", no_argument,       0, 'v'},
 			{"daemon",     no_argument,       0, 'd'},
+#ifdef HAVE_LIBSSL
+			{"ssl",     no_argument,       0, 's'},
+#endif
 			{"guest",     no_argument,       0, 'g'},
 			{"port",  required_argument, 0, 'p'},
 			{"file",  required_argument, 0, 'f'},
@@ -123,7 +134,12 @@ void parseArg(int argc, char *argv[]){
 			case 'd':
 				globalArgsServer.daemon = 1;
 				break;
-				
+
+#ifdef HAVE_LIBSSL
+			case 's':
+				globalArgsServer.ssl = 1;
+				break;
+#endif
 			case 'g':
 				globalArgsServer.guest = 1;
 				break;
