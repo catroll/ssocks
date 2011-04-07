@@ -2,7 +2,8 @@ AM_CFLAGS=-Wall -std=gnu99 -O2 -Wextra
 bin_PROGRAMS = nsocks ssocks ssocksd
 
 ssocks_SOURCES = bor-timer.c bor-util.c client.c net-util.c \
-socks5-client.c socks5-server.c ssocks.c output-util.c auth-util.c log-util.c socks5-common.c
+socks5-client.c socks5-server.c ssocks.c output-util.c auth-util.c\
+ssl-util.c log-util.c socks5-common.c
 
 nsocks_SOURCES = bor-timer.c bor-util.c client.c net-util.c \
 nsocks.c socks5-client.c socks5-server.c output-util.c auth-util.c \
