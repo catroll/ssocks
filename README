@@ -22,6 +22,7 @@ TODO:
 	- Set number of client max ( actually 128 is in client.h MAXCLI var )
 	- Add --pid-file option to server 
 	- ssocks bind localhost, not all
+	- SSL implements out of RFC
 	
 ------------------------------------------------------------------------
  - nsocks is a netcat like through a socks5 (usefull to test socks server)
