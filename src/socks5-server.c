@@ -119,7 +119,7 @@ void read_version (Client *c){
 
 		/* If too much method we truncate */
 		if (sizeof(req.methods) < (unsigned int)req.nmethods){
-			fprintf(stderr, "server [%d]: truncate methods", c->id);
+			ERROR(L_VERBOSE, "server [%d]: truncate methods", c->id);
 			req.nmethods = sizeof(req.methods);
 		}
 		

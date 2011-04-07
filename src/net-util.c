@@ -83,7 +83,7 @@ int new_listen_socket (int nport, int backlog){
     /* Making local address */
     addrS.sin_family = AF_INET;
     addrS.sin_port = htons (nport);      /* 0 for award of a free port */
-    addrS.sin_addr.s_addr = htonl(INADDR_ANY);  /* All Local Addresses */
+    addrS.sin_addr.s_addr = htonl(INADDR_ANY);  /* All Local addresses */
 
     /* Attachment socket to the server address */
     TRACE(L_DEBUG, "server: attachment socket server ...");
