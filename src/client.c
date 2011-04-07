@@ -38,7 +38,7 @@
  *  - mode = M_SERVER, M_CLIENT define in client.h
  *  - config can be NULL
  */
-void init_client (Client *c, int id, int mode, void *config)
+void init_client (Client *c, int id, int mode, int ver, void *config)
 {
 	/* Position in tc table */
     c->id = id;
@@ -51,7 +51,7 @@ void init_client (Client *c, int id, int mode, void *config)
     
     /* Start with no authentication set */
     c->auth = 0x00;
-    c->ver = 0x00;
+    c->ver = ver;
 
     /* First state in server mode */
     c->state = E_R_VER;
@@ -104,7 +104,7 @@ void raz_client (Client *c){
 	if ( c->soc_stream != -1 ) close(c->soc_stream);
 	if ( c->soc_bind != -1 ) close(c->soc_bind);
     /* bor_timer_remove(tc[nc].handle); */
-    init_client (c, c->id, c->mode, c->config);
+    init_client (c, c->id, c->mode, c->ver, c->config);
 }
 
 /* Used in ssocks a experimental tool ...

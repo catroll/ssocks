@@ -94,7 +94,7 @@ typedef struct {
 
 void append_log_client(Client *c, char *template, ...);
 
-void init_client (Client *tc, int nc, int mode, void *config);
+void init_client (Client *c, int id, int mode, int ver, void *config);
 void raz_client (Client *c);
 void disconnection(Client *c) ;
 int new_connection (int soc_ec, Client *tc);
