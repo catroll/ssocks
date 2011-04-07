@@ -36,7 +36,9 @@
 #include <config.h>
 #include <getopt.h>
 
-
+#ifdef HAVE_LIBSSL
+	#include <openssl/ssl.h>
+#endif
 
 
 int boucle_princ = 1;
@@ -152,6 +154,9 @@ struct globalArgs_t {
 	unsigned int port;		// -p option
 	unsigned int listen;	// -l option
 	unsigned int verbosity;	// -v
+#ifdef HAVE_LIBSSL
+	unsigned int ssl;		// -s option
+#endif
 	char *uname;			// -u option
 	char *passwd;			// -p option
 	
@@ -168,6 +173,9 @@ void usage(char *name){
 	printf("\t%s -s localhost:1080 -u y0ug -p 1234 mywebserv.com 80\n", name);
 	printf("\t%s -s localhost:1080 -l 8080\n", name);
 	printf("Options:\n");
+#ifdef HAVE_LIBSSL
+	printf("\t--ssl      enable secure socks5 protocol\n");
+#endif
 	printf("\t--verbose (increase verbose level)\n\n");
 	printf("\t--socks {host:port}\n");
 	printf("\t--uname {uname}\n");
@@ -185,6 +193,7 @@ void parseArg(int argc, char *argv[]){
 		static struct option long_options[] = {
 			{"help",    no_argument,       0, 'h'},
 			{"verbose", no_argument,       0, 'v'},
+			{"ssl",     no_argument,       0, 'k'},
 			{"socks",   required_argument, 0, 's'},
 			{"uname",   required_argument, 0, 'u'},
 			{"passwd",  required_argument, 0, 'p'},
@@ -195,7 +204,7 @@ void parseArg(int argc, char *argv[]){
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
-		c = getopt_long (argc, argv, "h?vs:u:p:l:",
+		c = getopt_long (argc, argv, "h?vks:u:p:l:",
 					long_options, &option_index);
 
 		/* Detect the end of the options. */
@@ -219,6 +228,12 @@ void parseArg(int argc, char *argv[]){
 				//globalArgs.verbosity++;
 				verbosity++;
 				break;
+
+#ifdef HAVE_LIBSSL
+			case 'k':
+				globalArgs.ssl = 1;
+				break;
+#endif
 
 			case 's':
 
@@ -279,6 +294,13 @@ void parseArg(int argc, char *argv[]){
 		usage(argv[0]);
 		exit(1);
 	}
+
+#ifdef HAVE_LIBSSL
+	if (globalArgs.ssl == 1){
+		SSL_load_error_strings();  /* readable error messages */
+		SSL_library_init();        /* initialize library */
+	}
+#endif
 }
 
 int main (int argc, char *argv[]){
