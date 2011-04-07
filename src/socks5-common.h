@@ -33,6 +33,7 @@
 #include <stdint.h>
 
 #define SOCKS5_V 0x05
+#define SOCKS5_SSL_V 0x06
 
 /* Client state */
 enum {
