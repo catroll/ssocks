@@ -124,12 +124,12 @@ void server(char *sockshost, int socksport, int port,
                 if (new_connection (soc_ec, tc) < 0) goto fin_serveur;
             
             for (nc = 0; nc < MAXCLI; nc++){
-				if ( tc[nc].state != E_WAIT ){
+				//if ( tc[nc].state != E_WAIT ){
 					if (tc[nc].soc != -1 && FD_ISSET (tc[nc].soc, &set_read))
-						dispatch_server_read (&tc[nc]);
+						dispatch_server (&tc[nc]);
 					else if (tc[nc].soc != -1 && FD_ISSET (tc[nc].soc, &set_write))
-						dispatch_server_write (&tc[nc]);
-                }
+						dispatch_server (&tc[nc]);
+                //}
                     
 				if (tc[nc].soc_stream != -1 && FD_ISSET (tc[nc].soc_stream, &set_read)){
 					dispatch_client(&tc[nc]);

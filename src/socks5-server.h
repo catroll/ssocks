@@ -31,8 +31,7 @@
 #include "client.h"
 
 
-void dispatch_server_read (Client *c);
-void dispatch_server_write (Client *c);
+void dispatch_server (Client *c);
 
 void read_version (Client *c);
 void write_version_ack (Client *c);

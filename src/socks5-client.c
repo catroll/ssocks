@@ -32,7 +32,6 @@
 
 
 void dispatch_client (Client *c){
-
 	switch(c->stateC){
 		case E_W_VER: write_version(c); break;
 		case E_R_VER_ACK: read_version_ack(c); break;
@@ -40,9 +39,9 @@ void dispatch_client (Client *c){
 		case E_R_AUTH_ACK: read_auth_ack(c); break;
 		case E_W_REQ: write_request(c); break;
 		case E_R_REQ_ACK: read_request_ack(c); break;
-		case E_SEND : write_client(c); break;
-		case E_RECV : read_client(c); break;
-		case E_REPLY: (c->buf_stream_w == 1) ? write_client(c) : read_client(c);
+		case E_REPLY:
+			(c->buf_stream_w == 1) ? write_client(c) : read_client(c);
+			break;
 		default : break;
 	}
 }
@@ -154,7 +153,7 @@ void read_version_ack(Client *c){
 		/* Mode dynamic used by ssocks only */
 		else if ( c->mode == M_DYNAMIC ){
 			/* Change state to recv on stateC and state and put flush of buf stream */
-			c->stateC = E_REPLY; c->state = E_RECV; c->buf_stream_w = 1;
+			c->stateC = E_REPLY; c->state = E_REPLY; c->buf_stream_w = 1;
 		}else{
 			/* Change state to write request */
 			c->stateC = E_W_REQ;
@@ -294,7 +293,7 @@ void read_auth_ack(Client *c){
 		/* Mode dynamic used by ssocks only */
 		if ( c->mode == M_DYNAMIC ){
 			/* Change state to recv on stateC and state and put flush of buf down */
-			c->stateC = E_REPLY; c->state = E_RECV; c->buf_stream_w = 1;
+			c->stateC = E_REPLY; c->state = E_REPLY; c->buf_stream_w = 1;
 		}else{
 			/* Change state to write request */
 			c->stateC = E_W_REQ;
@@ -345,7 +344,7 @@ void write_request(Client *c){
 		
 		/* Fix req buffer size */
 		c->req_b = sizeof(Socks5Req)+1+hostlen+2;
-		/* dump(c->req, c->req_b); */
+		/* DUMP(c->req, c->req_b); */
 		c->req_a = 0;	
 	}
 	

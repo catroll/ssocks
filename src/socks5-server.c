@@ -34,32 +34,34 @@
 #include "log-util.h"
 #include "configd-util.h"
 
-#include <pthread.h>
+#include <config.h> /* HAVE_LIBPTHREAD */
 
-void dispatch_server_read (Client *c){
+#ifdef HAVE_LIBPTHREAD
+	#include <pthread.h>
+#endif
+
+
+void dispatch_server (Client *c){
 	switch(c->state){
 		case E_R_VER: read_version(c); break;
+		case E_W_VER_ACK: write_version_ack(c); break;
 		case E_R_AUTH: read_auth(c); break;
+		case E_W_AUTH_ACK: write_auth_ack(c); break;
 		case E_R_REQ:
-			if ( c->mode == M_DYNAMIC)
+			if ( c->mode == M_DYNAMIC) /* Used by ssocks */
 				read_request_dynamic(c);
 			else
 				read_request(c);
 			break;
-		case E_RECV : read_server(c); break;
+		case E_W_REQ_ACK: write_request_ack(c); break;
+		case E_REPLY :
+			(c->buf_client_w == 1) ? write_server(c) : read_server(c);
+			break;
 		default : break;
-	}	
+	}
+
 }
 
-void dispatch_server_write (Client *c){
-	switch(c->state){
-		case E_W_VER_ACK: write_version_ack(c); break;
-		case E_W_AUTH_ACK: write_auth_ack(c); break;
-		case E_W_REQ_ACK: write_request_ack(c); break;
-		case E_RECV : write_server(c); break;
-		default : break;
-	}	
-}
 
 /* Read the client version and build the ack in buffer req
  *
@@ -440,8 +442,13 @@ void *thr_process_request( void *client ){
 			default:
 				ERROR(L_NOTICE, "server [%d]: support domain name and ipv4 only", c->id);
 				disconnection (c);
-				/*return;*/
+
+#ifdef HAVE_LIBPTHREAD
 				pthread_exit(NULL);
+#else
+				return NULL;
+#endif
+
 		}
 
 		append_log_client(c, "%s:%d", domain, port);
@@ -481,10 +488,10 @@ void *thr_process_request( void *client ){
 					memcpy(&res.bndport, &c->addr_stream.sin_port,
 							sizeof(c->addr_stream.sin_port));
 
-					/*dump(&c->adr_stream.sin_addr.s_addr, sizeof(c->adr_stream.sin_addr.s_addr));
-					dump(&c->adr_stream.sin_port, sizeof(c->adr_bind.sin_port));
-					dump(&c->adr_bind.sin_addr.s_addr, sizeof(c->adr_bind.sin_addr.s_addr));
-					dump(&c->adr_bind.sin_port, sizeof(c->adr_bind.sin_port));*/
+					/*DUMP(&c->adr_stream.sin_addr.s_addr, sizeof(c->adr_stream.sin_addr.s_addr));
+					DUMP(&c->adr_stream.sin_port, sizeof(c->adr_bind.sin_port));
+					DUMP(&c->adr_bind.sin_addr.s_addr, sizeof(c->adr_bind.sin_addr.s_addr));
+					DUMP(&c->adr_bind.sin_port, sizeof(c->adr_bind.sin_port));*/
 				}
 				break;
 			case 0x02: /* TCP/IP port binding */
@@ -507,8 +514,11 @@ void *thr_process_request( void *client ){
 				append_log_client(c, "ERROR request cmd");
 				ERROR(L_NOTICE, "server [%d]: don't support udp", c->id);
 				disconnection (c);
-				//return -1;
+#ifdef HAVE_LIBPTHREAD
 				pthread_exit(NULL);
+#else
+				return NULL;
+#endif
 		}
 
 		/* 0x00 succeeded, 0x01 general SOCKS failure ... */
@@ -530,7 +540,11 @@ void *thr_process_request( void *client ){
 		if ( kill(getpid(), SIGUSR1) != 0 )
 			perror("kill");
 
-		pthread_exit(NULL);
+#ifdef HAVE_LIBPTHREAD
+				pthread_exit(NULL);
+#else
+				return NULL;
+#endif
 }
 
 /* Read request packet and test it, create connection
@@ -569,6 +583,8 @@ void read_request (Client *c){
 
     c->req_pos += k;
     if ( c->req_pos >= (int)(sizeof(Socks5Req)  + 4) ){
+
+#ifdef HAVE_LIBPTHREAD
     	/* This avoid to block all socks client when we do a connection */
     	pthread_t thr;
     	pthread_create( &thr, NULL, thr_process_request, (void*) c);
@@ -579,6 +595,10 @@ void read_request (Client *c){
 
     	/* Next state wait end of thr_process_request */
 		c->state = E_WAIT;
+#else
+		thr_process_request((void*) c);
+#endif
+
 	}
 }
 
@@ -602,7 +622,6 @@ void read_request_dynamic (Client *c){
     c->buf_stream_b += k;
     if ( c->buf_stream_b-c->buf_stream_a >= (int)(sizeof(Socks5Req)  + 4) ){
 		TRACE(L_DEBUG, "server [%d]: testing dynamic client request ...", c->id);
-		
 
 		if ( c->config == NULL ){
 			ERROR(L_NOTICE, "server [%d]: no config", c->id);
@@ -643,7 +662,7 @@ void write_request_ack (Client *c){
 
     if (c->req_b-c->req_a <= 0){
     	/* Next state recv  */
-		c->state = E_RECV;
+		c->state = E_REPLY;
 		c->buf_client_w = 0; // ??
 	}
 }
@@ -675,14 +694,13 @@ void build_request_bind(Client *c){
 
 	res.rsv = 0;
 	res.atyp = 0x01;
-	/* TODO: set bndaddr and bndport in second
-	 * request ack in bind mode */
+	/* TODO: set bndaddr and bndport see RFC
 	/* res.bndaddr = 0;
 	res.bndport = 0; */
 
 	/* Copy in buffer for send */
 	memcpy(c->req, &res, sizeof(Socks5ReqACK));
-	/* dump(c->req, sizeof(Socks5ReqACK)); */
+	/* DUMP(c->req, sizeof(Socks5ReqACK)); */
 
 	/* Reset counter and fix b flag */
 	c->req_pos = 0;

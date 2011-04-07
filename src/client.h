@@ -41,19 +41,19 @@ enum{
 
 	M_CLIENT, /* Client mode used by nsocks and ssocks */
 
-	M_CLIENT_BIND, /* Client mode with bind request
+	M_CLIENT_BIND, /* Client mode with bind request,
 				    * used by nsocks and ssocks */
 
-	M_DYNAMIC, /* Launch a server and listen on. When it receive data
-				* it transmit it to a another socks server.
-				* Used by ssocks */
+	M_DYNAMIC, /* Run a server and listen, when it receive data
+				* it transmit it to a another socks server,
+				* used by ssocks */
 };
 
 /* TODO: Do some cleaning on client struct
  * Need to remove buffer req I thinks
  *
- * This structure is used when you use the client (like nsocks or
- * ssocksd) for this it've a mode flag that define rules to follow
+ * This structure is used in client/server mode for this
+ * it've a mode flag that define rules to follow
  */
 typedef struct {
     struct sockaddr_in addr,  		/* Client address */
@@ -68,8 +68,8 @@ typedef struct {
     int id;							/* ID in tc table */
 
     char auth;				/* Auth method define during the version check */
-    int state;				/* Server state, E_LIT_REQUETE, E_ECRIT_ENTETE, ...*/
-    int stateC;				/* Client state, not used in server mode */
+    int state;				/* Server state, define in socks5-common.h ...*/
+    int stateC;				/* Client state, define in socks5-common.h */
     int mode;				/* Operating mode: M_SERVER, M_CLIENT, M_DYNAMIC */
 	
     char req[BUFFER_SIZE];
@@ -91,12 +91,9 @@ typedef struct {
 							 * used in client mode (nsocks and ssocks) */
 } Client;
 
-
-
 void append_log_client(Client *c, char *template, ...);
 
 void init_client (Client *tc, int nc, int mode, void *config);
-
 void raz_client (Client *c);
 void disconnection(Client *c) ;
 int new_connection (int soc_ec, Client *tc);

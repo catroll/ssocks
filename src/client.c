@@ -28,35 +28,37 @@
 #include "socks5-common.h" /* load client.h */
 #include "output-util.h"
 #include "log-util.h"
+#include "net-util.h"
 
 #include <stdarg.h>
 #include <limits.h>
 
 /* Init the client structure
  *  - id in tc table
- *  - mode = 0 server, 1 client
+ *  - mode = M_SERVER, M_CLIENT define in client.h
  *  - config can be NULL
  */
 void init_client (Client *c, int id, int mode, void *config)
 {
-    c->soc = -1;
+	/* Position in tc table */
     c->id = id;
+
+    /* Default value for sockets -1 */
+    c->soc = c->soc_stream = c->soc_bind = -1;
 
     c->req[0] = 0;
     c->req_a = c->req_b = c->req_pos = 0;
     
+    /* Start with no authentication set */
     c->auth = 0x00;
     
     /* First state in server mode */
     c->state = E_R_VER;
 
     /* First state in client mode */
-
     c->stateC = E_W_VER;
+
     c->mode =  mode;
-	
-	c->soc_stream = -1;
-	c->soc_bind = -1;
 	
 	/* Don't need to set buf_stream[0] and buf_client[0]
 	 * at zero, only binary data */
@@ -64,6 +66,8 @@ void init_client (Client *c, int id, int mode, void *config)
 	c->buf_client_a = c->buf_client_b =  c->buf_client_w = 0;
 
 	c->config = config;
+
+	/* We need to start a '\0' beceause we append string in */
 	c->buf_log[0] = 0;
 	
 }
@@ -81,12 +85,14 @@ void disconnection(Client *c) {
 }
 
 /* Append log in the client log buffer, written in connection end.
+ * TODO: Look if overflow possible here
  */
 void append_log_client(Client *c, char *template, ...){
 	va_list ap;
 	va_start(ap, template);
-		vsprintf(c->buf_log + strlen(c->buf_log), template, ap);
-		sprintf(c->buf_log + strlen(c->buf_log), " | ");
+	int len = strlen(c->buf_log);
+	len += vsnprintf(c->buf_log + len, sizeof(c->buf_log) - len , template, ap);
+	snprintf(c->buf_log + len, sizeof(c->buf_log) - len, " | ");
 	va_end(ap);	
 }
 

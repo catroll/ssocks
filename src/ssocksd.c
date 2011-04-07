@@ -144,7 +144,7 @@ void parseArg(int argc, char *argv[]){
 				strcpy(globalArgsServer.fileconfig, optarg);
 				if ( loadConfigFile(optarg, &globalArgsServer) < 0 ){
 					ERROR(L_NOTICE, "config: config file error\n");
-					ERROR(L_NOTICE, "server: can't start misconfiguration");
+					ERROR(L_NOTICE, "server: can't start configuration error");
 					exit(1);
 				}	
 				break;
@@ -173,13 +173,13 @@ void parseArg(int argc, char *argv[]){
 		globalArgsServer.guest = 0;
 		if ( (c = load_auth_file(globalArgsServer.fileauth)) <= 0 ){
 			ERROR(L_NOTICE, "auth: no username load");
-			ERROR(L_NOTICE, "server: can't start misconfiguration");
+			ERROR(L_NOTICE, "server: can't start configuration error");
 			exit(1);
 		}else{
 			TRACE(L_NOTICE, "auth: %d usernames load", c);
 		}
 	}else{
-		TRACE(L_NOTICE, "warning: no authentification enable");
+		TRACE(L_NOTICE, "warning: no authentication enable");
 	}
 
 	verbosity = globalArgsServer.verbosity;
@@ -233,11 +233,11 @@ void server(int port){
             for (nc = 0; nc < MAXCLI; nc++){
 				
                 if (tc[nc].soc != -1 && FD_ISSET (tc[nc].soc, &set_read))
-                    dispatch_server_read (&tc[nc]);
+                    dispatch_server(&tc[nc]);
 
                 else if (tc[nc].soc != -1 &&
                 		FD_ISSET (tc[nc].soc, &set_write))
-                    dispatch_server_write (&tc[nc]);
+                    dispatch_server(&tc[nc]);
                 
 
                 if (tc[nc].soc_stream != -1 &&

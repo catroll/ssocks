@@ -1,6 +1,7 @@
-Socks5 server, implements RFC 1928 (SOCKS V5) and RFC 1929 
-(Authentication for SOCKS V5), and a netcat like tool, 
-which supports socks5 with authentication.
+sSocks is socks5 server, implements RFC 1928 (SOCKS V5) and RFC 1929 
+(Authentication for SOCKS V5), a netcat like tool, which supports socks5 
+with authentication and a socks5 relay (run a server and send to a 
+another socks5 server).
 
 ------------------------------------------------------------------------
 Features:
@@ -35,7 +36,7 @@ when it receive SIGTERM
 
 ------------------------------------------------------------------------
 More information see man page:
-ssocksd (1), nsocks (1), ssocksd.auth (5), ssocksd.conf (5)
+ssocksd (1), nsocks (1), ssocks (1), ssocksd.auth (5), ssocksd.conf (5)
 
 ------------------------------------------------------------------------
 Ubuntu/debian install:

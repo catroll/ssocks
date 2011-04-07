@@ -70,7 +70,7 @@ int build_addr_server(char *name, int port, struct sockaddr_in *addr){
 	return 1;
 }
 /*
- * TODO: Chose what interface bind
+ * TODO: Choose what interface bind
  */
 int new_listen_socket (int nport, int backlog){
     int soc_ec;

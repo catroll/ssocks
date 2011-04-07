@@ -36,29 +36,27 @@
 
 /* Client state */
 enum {
-	E_R_VER,
-	E_W_VER,
-	E_R_VER_ACK,
-	E_W_VER_ACK,
+	E_R_VER,		/* Read version */
+	E_W_VER,		/* Write version */
+	E_R_VER_ACK,	/* Read version ACK */
+	E_W_VER_ACK,	/* Write version ACK */
 
-	E_R_AUTH,
-	E_W_AUTH,
-	E_R_AUTH_ACK,
-	E_W_AUTH_ACK,
+	E_R_AUTH,		/* Read authentication */
+	E_W_AUTH,		/* Write authentication ACK */
+	E_R_AUTH_ACK,	/* Read authentication */
+	E_W_AUTH_ACK,	/* Write authentication ACK */
 
-	E_R_REQ,
-	E_W_REQ,
-	E_R_REQ_ACK,
-	E_W_REQ_ACK,
+	E_R_REQ,		/* Read authentication */
+	E_W_REQ,		/* Write authentication */
+	E_R_REQ_ACK,	/* Read authentication ACK */
+	E_W_REQ_ACK,	/* Write authentication ACK */
 
-	E_RECV,
-	E_SEND,
-	E_REPLY,
+	E_REPLY,		/* Read on a socket, write a another */
 
-	E_WAIT
+	E_WAIT			/* Nothing to do just wait */
 };
 
-#pragma pack(push, 2) /* Need to change alignment 4 -> 2 */
+
 
  /* Socks5 version packet */
 typedef struct {
@@ -100,7 +98,7 @@ typedef struct {
 
 /* Socks5 request packet ACK
  * Need to change alignment 4 -> 2  else sizeof 12 instead of 10 */
-
+#pragma pack(push, 2) /* Change alignment 4 -> 2 */
 typedef struct {
 	char ver;
 	char rep;
@@ -109,17 +107,15 @@ typedef struct {
 	struct in_addr bndaddr; /* uint32_t */
 	uint16_t  bndport;
 } Socks5ReqACK;
-
+#pragma pack(pop) /* End of change alignment */
 
 /* Configuration dynamic for ssocks */
 typedef struct {
-	char *host;
-	int port;
-	char *uname;
-	char *passwd;
+	char *host;	/* Socks you want to be connected */
+	int port;	/* Its port */
+	char *uname; /* Username for authentication can be NULL */
+	char *passwd; /* Password for authentication can be NULL */
 } ConfigDynamic;
-
-#pragma pack(pop) /* End of change alignment */
 
 
 void read_server (Client *c);

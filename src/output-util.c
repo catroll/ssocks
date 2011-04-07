@@ -55,8 +55,8 @@ void TRACE(int level, char *template, ...){
 	va_end(ap);
 }
 
-void dump(const char *s, int n){
-	int i;
+void DUMP(const char *s, size_t n){
+	unsigned int i;
 
 	for (i=0; i < n; i++)
 		printf ("0x%x ", s[i]);

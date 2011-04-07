@@ -28,6 +28,8 @@
 #ifndef OUTPUT_UTIL__H
 #define OUTPUT_UTIL__H
 
+#include <stdlib.h>
+
 /* Global variable */
 extern int verbosity;
 
@@ -40,7 +42,7 @@ enum {
 
 void TRACE(int level, char *template, ...);
 void ERROR(int level, char *template, ...);
-void dump (const char *s, int n);
+void DUMP (const char *s, size_t n);
 void trim(char * s);
 
 #endif /* OUTPUT_UTIL__H */
