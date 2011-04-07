@@ -40,6 +40,7 @@ int new_listen_socket (int nport, int maxpend);
 int new_client_socket(char *nameS, int nport,
 		struct sockaddr_in *addrC, struct sockaddr_in *addrS);
 
+int set_blocking(int fd);
 int set_non_blocking(int fd);
 
 
