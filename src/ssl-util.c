@@ -25,14 +25,19 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#include "ssl-util.h"
+
+#ifdef HAVE_LIBSSL
 
 #include "output-util.h"
 
-#include <openssl/crypto.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
 
-int ssl_init_client(SSL_CTX *ctx, char *serv_ca_cert){
+
+
+SSL_CTX *ctx;
+
+/*TODO: Write a shutdown function for ssl */
+int ssl_init_client( char *serv_ca_cert){
 	const SSL_METHOD *meth;
 
 	/* Create an SSL_METHOD structure
@@ -48,7 +53,7 @@ int ssl_init_client(SSL_CTX *ctx, char *serv_ca_cert){
 	/* Load the RSA CA certificate into the SSL_CTX structure
 	 * This will allow this client to verify the server's
 	 * certificate. */
-	if (SSL_CTX_load_verify_locations(ctx, serv_ca_cert, NULL) != 0) {
+	if (SSL_CTX_load_verify_locations(ctx, serv_ca_cert, NULL) != 1) {
 		ERR_print_errors_fp(stderr);
 		return -1;
 	}
@@ -58,10 +63,10 @@ int ssl_init_client(SSL_CTX *ctx, char *serv_ca_cert){
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
 	SSL_CTX_set_verify_depth(ctx, 1);
 
-
+	return 0;
 }
 
-int ssl_init_server(SSL_CTX *ctx, char *certfile, char *privkeyfile, int type){
+int ssl_init_server(char *certfile, char *privkeyfile, int type){
 	const SSL_METHOD *meth;
 
 	/* Create an SSL_METHOD structure
@@ -75,7 +80,7 @@ int ssl_init_server(SSL_CTX *ctx, char *certfile, char *privkeyfile, int type){
 	}
 
 	/* Load the server certificate into the SSL_CTX structure */
-	TRACE(L_VERBOSE, "server-ssl: load the server certificate\n");
+	TRACE(L_VERBOSE, "server-ssl: load the server certificate");
 	if (SSL_CTX_use_certificate_file(ctx, certfile, type)
 			<= 0) {
 		ERR_print_errors_fp( stderr);
@@ -83,25 +88,25 @@ int ssl_init_server(SSL_CTX *ctx, char *certfile, char *privkeyfile, int type){
 	}
 
 	/* Load the private-key corresponding to the server certificate */
-	TRACE(L_VERBOSE, "server-ssl: load the private-key\n");
+	TRACE(L_VERBOSE, "server-ssl: load the private-key");
 	if (SSL_CTX_use_PrivateKey_file(ctx, privkeyfile, type) <= 0) {
 		ERR_print_errors_fp( stderr);
 		return -1;
 	}
 
 	TRACE(L_VERBOSE, "server-ssl: check if the server certificate "\
-			"and private-key matches\n");
+			"and private-key matches");
 	/* Check if the server certificate and private-key matches */
 	if (!SSL_CTX_check_private_key(ctx)) {
 		ERROR(L_VERBOSE,"Private key does not match the "\
-				"certificate public key\n");
+				"certificate public key");
 		return -1;
 	}
 
 	return 0;
 }
 
-SSL *ssl_neogiciate_client(SSL_CTX *ctx, int soc){
+SSL *ssl_neogiciate_client(int soc){
 	SSL *ssl;
 	/* An SSL structure is created */
 	ssl = SSL_new (ctx);
@@ -125,7 +130,7 @@ SSL *ssl_neogiciate_client(SSL_CTX *ctx, int soc){
 	return ssl;
 }
 
-SSL *ssl_neogiciate_server(SSL_CTX *ctx, int soc){
+SSL *ssl_neogiciate_server(int soc){
 	SSL *ssl;
 	/* TCP connection is ready. A SSL structure is created */
 	ssl = SSL_new(ctx);
@@ -148,3 +153,5 @@ SSL *ssl_neogiciate_server(SSL_CTX *ctx, int soc){
 
 	return ssl;
 }
+
+#endif /* HAVE_LIBSSL */

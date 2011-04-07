@@ -29,9 +29,21 @@
 #ifndef SSL_UTIL__H
 #define SSL_UTIL__H
 
-SSL *ssl_neogiciate_server(SSL_CTX *ctx, int soc);
-SSL *ssl_neogiciate_client(SSL_CTX *ctx, int soc);
-int ssl_init_server(SSL_CTX *ctx, char *certfile, char *privkeyfile, int type);
-int ssl_init_client(SSL_CTX *ctx, char *serv_ca_cert);
+#include <config.h>
+
+#ifdef HAVE_LIBSSL
+
+#include <openssl/crypto.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
+extern SSL_CTX *gCtx;
+
+SSL *ssl_neogiciate_server(int soc);
+SSL *ssl_neogiciate_client(int soc);
+int ssl_init_server(char *certfile, char *privkeyfile, int type);
+int ssl_init_client(char *serv_ca_cert);
+
+#endif /* HAVE_LIBSSL */
 
 #endif /* SSL_UTIL__H */
