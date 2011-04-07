@@ -88,7 +88,7 @@ int new_listen_socket (int nport, int backlog){
     /* Attachment socket to the server address */
     TRACE(L_DEBUG, "server: attachment socket server ...");
     if (bor_bind_in (soc_ec, &addrS) == -1)
-      { perror ("bind ip"); close (soc_ec); return -1; }
+      { close (soc_ec); return -1; }
       
     /* Recovery of the port as network endian */
     if (bor_getsockname_in (soc_ec, &addrS) < 0)
