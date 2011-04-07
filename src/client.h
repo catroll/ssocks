@@ -31,6 +31,12 @@
 #include "bor-timer.h"
 #include "bor-util.h"
 
+#include <config.h>
+
+#ifdef HAVE_LIBSSL
+	#include "ssl-util.h"
+#endif
+
 #define MAXCLI 128
 #define BUFFER_SIZE 4096
 
@@ -90,6 +96,11 @@ typedef struct {
 
 	void *config; 			/* Configuration data pointer
 							 * used in client mode (nsocks and ssocks) */
+
+#ifdef HAVE_LIBSSL
+	SSL_CTX *ctx;
+	SSL *ssl;
+#endif
 } Client;
 
 void append_log_client(Client *c, char *template, ...);

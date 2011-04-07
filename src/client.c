@@ -71,6 +71,10 @@ void init_client (Client *c, int id, int mode, int ver, void *config)
 	/* We need to start a '\0' beceause we append string in */
 	c->buf_log[0] = 0;
 	
+#ifdef HAVE_LIBSSL
+	c->ctx = NULL;
+	c->ssl = NULL;
+#endif
 }
 
 /* Disconnection */
@@ -238,7 +242,7 @@ int new_connection (int soc_ec, Client *tc){
             nc, bor_adrtoa_in(&adrC_tmp));
         
         append_log_client(&tc[nc], "%s", bor_adrtoa_in(&adrC_tmp));
-		set_non_blocking(tc[nc].soc);
+		//set_non_blocking(tc[nc].soc);
     } else {
         close (soc_tmp);
         ERROR (L_NOTICE, "server: %s connection refused : too many clients!", 
