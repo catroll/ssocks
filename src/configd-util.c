@@ -75,8 +75,16 @@ int loadConfigFile(char *filename, struct globalArgsServer_t *c){
 			c->verbosity = atoi(val);
 		}else if(strcasecmp(var, "GUEST") == 0 ){
 			c->guest = atoi(val);
+#ifdef HAVE_LIBSSL
+		}else if(strcasecmp(var, "CERT") == 0 ){
+			strcpy(c->filecert, val);
+		}else if(strcasecmp(var, "KEY") == 0 ){
+			strcpy(c->filekey, val);
+		}else if(strcasecmp(var, "SSL") == 0 ){
+			c->ssl = atoi(val);
+#endif /* HAVE_LIBSSL */
 		}else{
-			ERROR(L_NOTICE, "config: unkown option %s", var);
+			ERROR(L_NOTICE, "config: unknown option %s", var);
 			return -1;
 		}
 		

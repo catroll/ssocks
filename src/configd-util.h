@@ -39,6 +39,8 @@ struct globalArgsServer_t {
 	unsigned int daemon;		// -d option
 #ifdef HAVE_LIBSSL
 	unsigned int ssl;			// -s option
+	char filecert[255];			// -c option
+	char filekey[255];			// -k option
 #endif
 	unsigned int guest;
 	char **inputFiles;			// input files
