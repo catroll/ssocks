@@ -40,10 +40,6 @@
 	#include <pthread.h>
 #endif
 
-#ifdef HAVE_LIBSSL
-	#include <openssl/ssl.h>
-#endif
-
 void dispatch_server (Client *c){
 	switch(c->state){
 		case E_R_VER: read_version(c); break;
@@ -89,7 +85,7 @@ void read_version (Client *c){
     /* Warm if the buffer is full, the third parameter read goes to 0,
      * so read return 0 as a disconnection */
     TRACE(L_DEBUG, "server [%d]: read version ...", c->id);
-    k = read (c->soc, 
+    k = read (c->soc,
               c->req+c->req_pos,
               sizeof(c->req)-c->req_pos-1);
 	if (k < 0) { perror ("read version"); disconnection (c); return; }
@@ -225,7 +221,7 @@ void read_version (Client *c){
 /* Write the version ack build by read_version
  */
 void write_version_ack (Client *c){
-	int k;
+	int k = 0;
 	
 	TRACE(L_DEBUG, "server [%d]: write version ack ...", c->id);
     if (c->req_b-c->req_a > 0) {
@@ -241,7 +237,14 @@ void write_version_ack (Client *c){
 		/* Init SSL here
 		 */
 		if ( c->ver == SOCKS5_SSL_V){
+			//set_blocking(c->soc);
 			TRACE(L_DEBUG, "server [%d]: socks5 ssl enable ...", c->id);
+			c->ssl = ssl_neogiciate_server(c->soc);
+			if ( c->ssl == NULL ){
+				ERROR(L_VERBOSE, "server [%d]: ssl error", c->id);
+				disconnection (c);
+				return;
+			}
 		}
 #endif
 
@@ -276,12 +279,20 @@ void write_version_ack (Client *c){
  *	+----+--------+
  */
 void read_auth (Client *c){
-    int k, ok = 0;
+    int k = 0, ok = 0;
 
     TRACE(L_DEBUG, "server [%d]: read authentication uname/passwd ...", c->id);
-    k = read (c->soc, 
-              c->req+c->req_pos,
-              sizeof(c->req)-c->req_pos-1);
+	if ( c->ver == SOCKS5_SSL_V){
+#ifdef HAVE_LIBSSL
+	    k = SSL_read (c->ssl,
+	              c->req+c->req_pos,
+	              sizeof(c->req)-c->req_pos-1);
+#endif
+	}else{
+	    k = read (c->soc,
+	              c->req+c->req_pos,
+	              sizeof(c->req)-c->req_pos-1);
+	}
 	if (k < 0) { perror ("read socket"); disconnection (c); return; }
 	if (k == 0) { 
 		ERROR(L_VERBOSE, "server: maybe buffer is full"); 
@@ -373,12 +384,17 @@ void read_auth (Client *c){
 /* Write the authentication ack build by read_auth
  */
 void write_auth_ack (Client *c){
-
-	int k;
+	int k = 0;
 	
 	TRACE(L_DEBUG, "server [%d]: write version ack ...", c->id);
     if (c->req_b-c->req_a > 0) {
-        k = write (c->soc, c->req+c->req_a, c->req_b-c->req_a);
+		if ( c->ver == SOCKS5_SSL_V){
+#ifdef HAVE_LIBSSL
+			k = SSL_write(c->ssl, c->req+c->req_a, c->req_b-c->req_a);
+#endif
+		}else{
+			k = write (c->soc_stream, c->req+c->req_a, c->req_b-c->req_a);
+		}
         if (k < 0) { perror ("write socket"); disconnection (c); return; }
         TRACE(L_DEBUG, "server [%d]: wrote %d bytes", c->id, k);
         c->req_a += k;
@@ -471,7 +487,7 @@ void *thr_process_request( void *client ){
 
 		}
 
-		append_log_client(c, "%s:%d", domain, port);
+		append_log_client(c, "v%d %s:%d", c->ver, domain, port);
 
 		/* Request ack packet:
 		 *	+----+-----+-------+------+----------+----------+
@@ -480,7 +496,7 @@ void *thr_process_request( void *client ){
 		 *	| 1  |  1  | X'00' |  1   | Variable |    2     |
 		 *	+----+-----+-------+------+----------+----------+
 		 *  Build ack */
-		res.ver = c->ver;
+		res.ver = SOCKS5_V;/*c->ver*/;
 		res.rsv = 0;
 		res.atyp = 0x01;
 
@@ -587,12 +603,20 @@ void *thr_process_request( void *client ){
  * See RFC 1928 / 4.  Requests for full information
  */
 void read_request (Client *c){
-    int k;
+	int k = 0;
 
     TRACE(L_DEBUG, "server [%d]: read client request ...", c->id);
-    k = read (c->soc,
-              c->req+c->req_pos,
-              sizeof(c->req)-c->req_pos-1);
+	if ( c->ver == SOCKS5_SSL_V){
+#ifdef HAVE_LIBSSL
+	    k = SSL_read (c->ssl,
+	              c->req+c->req_pos,
+	              sizeof(c->req)-c->req_pos-1);
+#endif
+	}else{
+	    k = read (c->soc,
+	              c->req+c->req_pos,
+	              sizeof(c->req)-c->req_pos-1);
+	}
 	if (k < 0) { perror ("read socket"); disconnection (c); return; }
 	if (k == 0) {
 		ERROR(L_VERBOSE,  "server: maybe buffer is full");
@@ -625,7 +649,7 @@ void read_request (Client *c){
 /* Used by ssocks not in the server
  */
 void read_request_dynamic (Client *c){
-    int k;
+	int k = 0;
 
 	TRACE(L_DEBUG, "server [%d]: read dynamic client request ...", c->id);
 	k = read (c->soc, 
@@ -670,11 +694,17 @@ void read_request_dynamic (Client *c){
 /* Write the request ack build by read_request
  */
 void write_request_ack (Client *c){
-	int k;
+	int k = 0;
 	
 	TRACE(L_DEBUG, "server [%d]: send request ack ...", c->id);
     if (c->req_b-c->req_a > 0) {
-        k = write (c->soc, c->req+c->req_a, c->req_b-c->req_a);
+		if ( c->ver == SOCKS5_SSL_V){
+#ifdef HAVE_LIBSSL
+			k = SSL_write(c->ssl, c->req+c->req_a, c->req_b-c->req_a);
+#endif
+		}else{
+			k = write (c->soc, c->req+c->req_a, c->req_b-c->req_a);
+		}
         if (k < 0) { perror ("write socket"); disconnection (c); return; }
         TRACE(L_DEBUG, "server [%d]: send %d bytes", c->id, k);
         c->req_a += k;

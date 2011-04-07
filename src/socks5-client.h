@@ -31,21 +31,32 @@
 
 #include "client.h"
 
+#ifdef HAVE_LIBSSL
+	#include "ssl-util.h"
+#endif
 
 typedef struct {
-	char *host;
-	int port;
+	char *host;		/* Host destination */
+	int port;		/* Port destination */
 	
+	char *uname; 	/* Socks username */
+	char *passwd;	/* Socks password */
 	
-	char *uname;
-	char *passwd;
-	
-	int loop;
-	int naskbind;
+	int loop;	  	/* Stop the client loop */
+	int naskbind; 	/* Count number of ask send for bind */
 
-	int version;
+	int version;  	/* Version wanted */
+	int bind;     	/* BIND mode not connected */
+
+	int soc;		/* If connection OK is != -1 */
+#ifdef HAVE_LIBSSL
+	SSL *socSsl;	/* If connection OK is != NULL */
+#endif
 } ConfigClient;
 
+#ifdef HAVE_LIBSSL
+	extern SSL *sslCli;
+#endif
 
 void dispatch_client (Client *c);
 
@@ -59,9 +70,7 @@ void write_request(Client *c);
 void read_request_ack(Client *c);
 
 int new_socket_with_socks(char *sockshost, int socksport,
-							char *host, int port,
-							char *uname, char *passwd,
-							int bind, int ssl);
+		ConfigClient *config);
 
 
 

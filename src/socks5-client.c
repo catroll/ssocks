@@ -25,13 +25,16 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#include <config.h>
+
 #include "socks5-client.h"
 #include "socks5-common.h"
+
 #include "net-util.h"
 #include "output-util.h"
 
 #ifdef HAVE_LIBSSL
-	#include <openssl/ssl.h>
+	SSL *sslCli;
 #endif
 
 void dispatch_client (Client *c){
@@ -43,7 +46,13 @@ void dispatch_client (Client *c){
 		case E_W_REQ: write_request(c); break;
 		case E_R_REQ_ACK: read_request_ack(c); break;
 		case E_REPLY:
-			(c->buf_stream_w == 1) ? write_client(c) : read_client(c);
+			if(c->buf_stream_w == 1){
+				if (c->ver == SOCKS5_SSL_V) write_client_ssl(c);
+				else write_client(c);
+			}else{
+				if (c->ver == SOCKS5_SSL_V) read_client_ssl(c);
+				else read_client(c);
+			}
 			break;
 		default : break;
 	}
@@ -64,10 +73,15 @@ void write_version(Client *c){
 	
 	/* Build version packet */
 	if (c->req_a == 0 && c->req_b == 0){
-		TRACE(L_DEBUG, "client: build version packet ...");
+		c->ver = (c->mode == M_DYNAMIC) ?
+				((ConfigDynamic*)c->config)->version :
+				((ConfigClient*)c->config)->version;
+
+		TRACE(L_DEBUG, "client: build version (v%d) packet ...",
+				c->ver);
 
 		Socks5Version req;
-		req.ver = ((ConfigClient*)c->config)->version;
+		req.ver = c->ver;
 		req.nmethods = 0x02;
 		memcpy(c->req, &req, 2);
 
@@ -80,7 +94,8 @@ void write_version(Client *c){
 	}
 	
     if (c->req_b-c->req_a > 0) {
-    	TRACE(L_DEBUG, "client: write version packet (%d bytes)...", c->req_b-c->req_a);
+    	TRACE(L_DEBUG, "client: write version packet (%d bytes)...",
+    			c->req_b-c->req_a);
         k = write (c->soc_stream, c->req+c->req_a, c->req_b-c->req_a);
         if (k < 0) { perror ("write socket"); disconnection (c); return; }
         TRACE(L_DEBUG, "client: wrote %d bytes", k);
@@ -156,8 +171,14 @@ void read_version_ack(Client *c){
 		 */
 		if ( c->ver == SOCKS5_SSL_V){
 			TRACE(L_DEBUG, "client: socks5 ssl enable ...", c->id);
+			c->ssl = ssl_neogiciate_client(c->soc_stream);
+			if ( c->ssl == NULL ){
+				ERROR(L_VERBOSE, "client: ssl error");
+				disconnection (c);
+				return;
+			}
 		}
-#endif
+#endif /* HAVE_LIBSSL */
 
 		/* Change state in function of the method */
 		if ( res.method == 0x02 )
@@ -186,7 +207,7 @@ void read_version_ack(Client *c){
  *	+----+------+----------+------+----------+
  */
 void write_auth(Client *c){
-	int k;
+	int k = 0;
 	
 	/* Build authentication packet */
 	if (c->req_a == 0 && c->req_b == 0){
@@ -233,7 +254,14 @@ void write_auth(Client *c){
 
     if (c->req_b-c->req_a > 0) {
 		TRACE(L_DEBUG, "client: write authentication packet ...");
-        k = write (c->soc_stream, c->req+c->req_a, c->req_b-c->req_a);
+
+		if ( c->ver == SOCKS5_SSL_V){
+#ifdef HAVE_LIBSSL
+			k = SSL_write(c->ssl, c->req+c->req_a, c->req_b-c->req_a);
+#endif
+		}else{
+			k = write (c->soc_stream, c->req+c->req_a, c->req_b-c->req_a);
+		}
         if (k < 0) { perror ("write authentication"); disconnection (c); return; }
         TRACE(L_DEBUG, "client: wrote %d bytes", k);
         c->req_a += k;
@@ -262,12 +290,21 @@ void write_auth(Client *c){
  *	+----+--------+
  */
 void read_auth_ack(Client *c){
-    int k;
+	int k = 0;
 
     TRACE(L_DEBUG, "client: read authentication ack ...");
-    k = read (c->soc_stream, 
-              c->req+c->req_b, 
-              sizeof(c->req)-c->req_b-1);
+	if ( c->ver == SOCKS5_SSL_V){
+#ifdef HAVE_LIBSSL
+		k = SSL_read(c->ssl,
+				  c->req+c->req_b,
+	              sizeof(c->req)-c->req_b-1);
+#endif
+	}else{
+	    k = read (c->soc_stream,
+	              c->req+c->req_b,
+	              sizeof(c->req)-c->req_b-1);
+	}
+
     if (k < 0) { perror ("read authentication"); disconnection(c); return; }
     if (k == 0) {
     	ERROR(L_NOTICE, "client: maybe buffer is full");
@@ -327,7 +364,7 @@ void read_auth_ack(Client *c){
  * See RFC 1928 / 4.  Requests for full information
  */
 void write_request(Client *c){
-	int k;
+	int k = 0;
 
 	/* build request packet */
 	if (c->req_a == 0 && c->req_b == 0){
@@ -361,7 +398,13 @@ void write_request(Client *c){
 	}
 	
     if (c->req_b-c->req_a > 0) {
-        k = write (c->soc_stream, c->req+c->req_a, c->req_b-c->req_a);
+		if ( c->ver == SOCKS5_SSL_V){
+#ifdef HAVE_LIBSSL
+			k = SSL_write(c->ssl, c->req+c->req_a, c->req_b-c->req_a);
+#endif
+		}else{
+			k = write (c->soc_stream, c->req+c->req_a, c->req_b-c->req_a);
+		}
         if (k < 0) { perror ("write request"); disconnection (c); return; }
         TRACE(L_DEBUG, "client: wrote %d bytes", k);
         c->req_a += k;
@@ -390,12 +433,20 @@ void write_request(Client *c){
  * See RFC 1928 / 4.  Requests for full information
  */
 void read_request_ack(Client *c){
-    int k;
+	int k = 0;
 
     TRACE(L_DEBUG, "client: read request ack ...");
-    k = read (c->soc_stream, 
-              c->req+c->req_b, 
-              sizeof(c->req)-c->req_b-1);
+	if ( c->ver == SOCKS5_SSL_V){
+#ifdef HAVE_LIBSSL
+		k = SSL_read(c->ssl,
+				  c->req+c->req_b,
+	              sizeof(c->req)-c->req_b-1);
+#endif
+	}else{
+	    k = read (c->soc_stream,
+	              c->req+c->req_b,
+	              sizeof(c->req)-c->req_b-1);
+	}
     if (k < 0) { perror ("read socket"); disconnection(c); return; }
     if (k == 0) {
     	ERROR(L_NOTICE, "client: maybe buffer is full");
@@ -451,36 +502,30 @@ void read_request_ack(Client *c){
 	}
     return;		
 }
-
-/* Create a socket trough a socks5 server
- * and return this socket
- */
 int new_socket_with_socks(char *sockshost, int socksport,
-							char *host, int port,
-							char *uname, char *passwd,
-							int bind, int ssl){
+		ConfigClient *config){
 	int maxfd = 0, res;
 	fd_set set_read, set_write;
-    ConfigClient config;
     Client c;
 
-	/* Configure the configuration struct */
-	config.host = host;
-	config.port = port;
-	config.loop = 1;
-	config.uname = uname;
-	config.passwd = passwd;
-	config.naskbind = 0;
-
+	// Init ConfigClient structure
+	config->naskbind = 0;
+	config->loop = 1;
+	config->soc = -1;
 #ifdef HAVE_LIBSSL
-	config.version = (ssl == 1) ? SOCKS5_SSL_V : SOCKS5_V;
-#else
-	config.version = SOCKS5_V;
+	config->socSsl = NULL;
 #endif
 
+	if ( config->version != SOCKS5_SSL_V &&
+			config->version != SOCKS5_V ){
+		ERROR(L_NOTICE, "ConfigClient: error, wrong version");
+	}
+
 	/* Initialization of the structure client in client mode */
-	if ( bind ) init_client (&c, 0, M_CLIENT_BIND, config.version, &config);
-	else init_client (&c, 0, M_CLIENT, config.version, &config);
+	if ( config->bind )
+		init_client (&c, 0, M_CLIENT_BIND, config->version, config);
+	else
+		init_client (&c, 0, M_CLIENT, config->version, config);
 
 	/* Make socket on the SOCKS server */
 	c.soc_stream = new_client_socket(sockshost, socksport, &c.addr, &c.addr_stream);
@@ -492,7 +537,7 @@ int new_socket_with_socks(char *sockshost, int socksport,
     //bor_signal (SIGINT, capte_fin, SA_RESTART);
 
     /* Select loop */
-    while (config.loop && c.soc_stream != -1) {
+    while (config->loop && c.soc_stream != -1) {
 
 		FD_ZERO (&set_read);
 		FD_ZERO (&set_write);
@@ -531,6 +576,10 @@ int new_socket_with_socks(char *sockshost, int socksport,
             else { perror ("select"); close(c.soc_stream); return -1; }
         }
 	}
+#ifdef HAVE_LIBSSL
+	config->socSsl = c.ssl;
+#endif
 
-	return c.soc_stream;
+	config->soc =  c.soc_stream;
+	return 0;
 }
