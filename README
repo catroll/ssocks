@@ -25,6 +25,20 @@ TODO:
 	- SSL implements out of RFC
 	
 ------------------------------------------------------------------------
+test@remoteserver$ ssocksd -s -c keys/server.crt -k keys/server.key \
+		-a ssocksd.auth
+
+you@laptop$ ssocks --ca src/keys/ca.crt -s remoteserver:1080 \
+		-u admin -p abcde -l 1088 
+
+Now set your browser to use localhost 1088 with protocole socks5.
+All you'r request pass trought the localsocks
+that handles connect to remote socks5 server establish a ssl tunnel, 
+check the certificate, authenticate you with admin:abcde, and transmit data.
+
+In the style of ssh:
+$ ssh -D1088 you@remoteserver
+------------------------------------------------------------------------
  - nsocks is a netcat like through a socks5 (usefull to test socks server)
  - ssocksd is the socks5 server
  - ssocks is a socks5 relay, it run a socks server on your localhost interface, and
