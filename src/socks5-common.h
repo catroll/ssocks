@@ -115,6 +115,7 @@ typedef struct {
 typedef struct {
 	char *host;	/* Socks you want to be connected */
 	int port;	/* Its port */
+	int version; /* Socks5 version */
 	char *uname; /* Username for authentication can be NULL */
 	char *passwd; /* Password for authentication can be NULL */
 } ConfigDynamic;
@@ -126,5 +127,7 @@ void write_server (Client *c);
 void read_client (Client *c);
 void write_client (Client *c);
 
+void read_client_ssl (Client *c);
+void write_client_ssl (Client *c);
 
 #endif /* SOCKS5_COMMON__H */
