@@ -41,9 +41,7 @@
 #include <unistd.h>
 #include <config.h>
 
-#ifdef HAVE_LIBSSL
-	#include <openssl/ssl.h>
-#endif
+
 
 #define DEFAULT_PORT 1080
 #define PID_FILE "/var/run/ssocksd.pid"
@@ -67,6 +65,8 @@ void usage(char *name){
 	printf("Options:\n");
 #ifdef HAVE_LIBSSL
 	printf("\t--ssl      enable secure socks5 protocol\n");
+	printf("\t--cert {file.crt}   set server certificate\n");
+	printf("\t--key  {prv.key}    set server private key\n");
 #endif
 	printf("\t--daemon   daemon mode (background)\n");
 	printf("\t--verbose  increase verbose level\n\n");
@@ -90,21 +90,25 @@ void parseArg(int argc, char *argv[]){
 
 #ifdef HAVE_LIBSSL
 	globalArgsServer.ssl = 0;
+	globalArgsServer.filecert[0] = 0;
+	globalArgsServer.filekey[0] = 0;
 #endif
 
 	
 	while (1){
 		static struct option long_options[] = {
-			{"help", no_argument,       0, 'h'},
+			{"help",    no_argument,       0, 'h'},
 			{"verbose", no_argument,       0, 'v'},
-			{"daemon",     no_argument,       0, 'd'},
+			{"daemon",  no_argument,       0, 'd'},
 #ifdef HAVE_LIBSSL
-			{"ssl",     no_argument,       0, 's'},
+			{"ssl",  no_argument,       0, 's'},
+			{"cert", required_argument, 0, 'c'},
+			{"key",  required_argument, 0, 'k'},
 #endif
-			{"guest",     no_argument,       0, 'g'},
-			{"port",  required_argument, 0, 'p'},
-			{"file",  required_argument, 0, 'f'},
-			{"auth",    required_argument, 0, 'a'},
+			{"guest",no_argument,       0, 'g'},
+			{"port", required_argument, 0, 'p'},
+			{"file", required_argument, 0, 'f'},
+			{"auth", required_argument, 0, 'a'},
 			{"log",  required_argument, 0, 'l'},
 			{0, 0, 0, 0}
 		};
@@ -112,13 +116,13 @@ void parseArg(int argc, char *argv[]){
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
-		c = getopt_long (argc, argv, "h?vsgdf:a:p:l:",
+		c = getopt_long (argc, argv, "h?vsgdk:c:f:a:p:l:",
 					long_options, &option_index);
 
 		/* Detect the end of the options. */
 		if (c == -1)
 			break;
-
+		/* TODO: Dangerous strcpy here fix this!!! */
 		switch (c)	{
 			case 0:
 				/* If this option set a flag, do nothing else now. */
@@ -143,6 +147,12 @@ void parseArg(int argc, char *argv[]){
 			case 's':
 				globalArgsServer.ssl = 1;
 				break;
+			case 'c':
+				strcpy(globalArgsServer.filecert, optarg);
+				break;
+			case 'k':
+				strcpy(globalArgsServer.filekey, optarg);
+				break;
 #endif
 			case 'g':
 				globalArgsServer.guest = 1;
@@ -166,7 +176,7 @@ void parseArg(int argc, char *argv[]){
 					ERROR(L_NOTICE, "config: config file error\n");
 					ERROR(L_NOTICE, "server: can't start configuration error");
 					exit(1);
-				}	
+				}
 				break;
 
 			case '?':
@@ -206,11 +216,21 @@ void parseArg(int argc, char *argv[]){
 	if (globalArgsServer.ssl == 1){
 		SSL_load_error_strings();  /* readable error messages */
 		SSL_library_init();        /* initialize library */
+		if ( globalArgsServer.filecert[0] == 0 ){
+			ERROR(L_NOTICE, "server: need a certificate file to use ssl");
+		}
+		if ( globalArgsServer.filekey[0] == 0 ){
+			ERROR(L_NOTICE, "server: need a private key file to use ssl");
+		}
+		if ( ssl_init_server(globalArgsServer.filecert,
+				globalArgsServer.filekey, SSL_FILETYPE_PEM) != 0){
+			ERROR(L_NOTICE, "server: ssl configuration error");
+			exit(1);
+		}
 	}
 #endif
 
 	verbosity = globalArgsServer.verbosity;
-
 }
 
 void capte_usr1(){

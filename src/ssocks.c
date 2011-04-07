@@ -48,6 +48,11 @@ struct globalArgs_t {
 	unsigned int verbosity;	// -v
 	unsigned int background;// -b
 
+#ifdef HAVE_LIBSSL
+	unsigned int ssl;		// -k option
+	char *cafile;			// -c option
+#endif
+
 	char *uname;			// -u option
 	char *passwd;			// -p option
 
@@ -79,14 +84,19 @@ void usage(char *name){
 	printf("\t--uname {uname}\n");
 	printf("\t--passwd {passwd}\n");
 	printf("\t--listen {port}\n");
+#ifdef HAVE_LIBSSL
+	printf("\t--ca  {cafile.crt} CA certificate of dst server (enable SSL)\n");
+#endif
 	printf("\t--background\n");
 	printf("\n");
 	printf("Bug report %s\n", PACKAGE_BUGREPORT);
 }
 
 void server(char *sockshost, int socksport, int port,
-		char *uname, char *passwd){
+		char *uname, char *passwd, int ssl){
     int soc_ec = -1, maxfd, res, nc;  
+    fd_set set_read;
+    fd_set set_write;
     Client tc[MAXCLI]; 
     ConfigDynamic config;
 
@@ -94,10 +104,13 @@ void server(char *sockshost, int socksport, int port,
     config.port = socksport;
     config.uname = uname;
     config.passwd = passwd;
+#ifdef HAVE_LIBSSL
+	config.version = (ssl == 1) ? SOCKS5_SSL_V : SOCKS5_V;
+#else
+	config.version = SOCKS5_V;
+#endif
 
-    fd_set set_read;
-    fd_set set_write;
-    
+
     /* Init client tab */
     for (nc = 0; nc < MAXCLI; nc++) init_client (&tc[nc], nc, M_DYNAMIC, 0, &config);
     
@@ -167,13 +180,16 @@ void parseArg(int argc, char *argv[]){
 			{"uname",   required_argument, 0, 'u'},
 			{"passwd",  required_argument, 0, 'p'},
 			{"listen",  required_argument, 0, 'l'},
+#ifdef HAVE_LIBSSL
+			{"ca",      required_argument, 0, 'c'},
+#endif
 			{0, 0, 0, 0}
 		};
 
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
-		c = getopt_long (argc, argv, "h?bvs:u:p:l:",
+		c = getopt_long (argc, argv, "h?bvc:s:u:p:l:",
 					long_options, &option_index);
 
 		/* Detect the end of the options. */
@@ -197,6 +213,16 @@ void parseArg(int argc, char *argv[]){
 				//globalArgs.verbosity++;
 				verbosity++;
 				break;
+
+#ifdef HAVE_LIBSSL
+			case 'c':
+				globalArgs.ssl = 1;
+				globalArgs.cafile = optarg;
+				break;
+			case 'k':
+				globalArgs.ssl = 1;
+				break;
+#endif
 
 			case 'b':
 				globalArgs.background = 1;
@@ -251,12 +277,36 @@ void parseArg(int argc, char *argv[]){
 		usage(argv[0]);
 		exit(1);
 	}
+#ifdef HAVE_LIBSSL
+	/*Initialize ssl with the CA certificate file
+	 */
+	if (globalArgs.cafile != NULL){
+		SSL_load_error_strings();  /* readable error messages */
+		SSL_library_init();        /* initialize library */
+		TRACE(L_VERBOSE, "client: init ssl ...");
+		if (globalArgs.cafile == NULL){
+			ERROR(L_NOTICE, "client: actually need CA certificate file");
+			exit(1);
+		}
+		if ( ssl_init_client(globalArgs.cafile) != 0){
+			ERROR(L_NOTICE, "client: ssl config error");
+			exit(1);
+		}
+		TRACE(L_VERBOSE, "client: ssl ok.");
+	}
+#endif
 }
 
 
 int main (int argc, char *argv[]){
 	parseArg(argc, argv);
 	server(globalArgs.sockshost, globalArgs.socksport, globalArgs.listen,
-			globalArgs.uname, globalArgs.passwd);
+			globalArgs.uname, globalArgs.passwd,
+#ifdef HAVE_LIBSSL
+			globalArgs.ssl
+#else
+			0
+#endif
+			);
 	exit(0);
 }

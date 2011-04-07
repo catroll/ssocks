@@ -27,18 +27,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 #include "bor-util.h"
 #include "net-util.h"
 #include "bor-timer.h"
+
 #include "output-util.h"
+#include "socks5-common.h"
 #include "socks5-client.h"
 
 #include <config.h>
 #include <getopt.h>
 
-#ifdef HAVE_LIBSSL
-	#include <openssl/ssl.h>
-#endif
 
 
 int boucle_princ = 1;
@@ -47,25 +47,26 @@ void capte_fin (int sig){
     boucle_princ = 0;
 }
 
-void netcat_like(int soc){
+void netcat_like(ConfigClient *config){
+
 	/* Catch CTRL-C */
     bor_signal (SIGINT, capte_fin, SA_RESTART);
     
 	int maxfd=0, res;
 	fd_set set_read, set_write;
 	char buf[4096];
-	int buf_a = 0, buf_b = 0, k;
+	int buf_a = 0, buf_b = 0, k = 0;
 	
 	while (boucle_princ){
 		FD_ZERO (&set_read);
 		FD_ZERO (&set_write);
 		
 		FD_SET (0, &set_read);
-		FD_SET (soc, &set_read);
-		if (soc > maxfd) maxfd = soc; /* Fix maxfd */	
+		FD_SET (config->soc, &set_read);
+		if (config->soc > maxfd) maxfd = config->soc; /* Fix maxfd */
 		
 		if ( buf_b - buf_a > 0 ){
-			FD_SET (soc, &set_write);
+			FD_SET (config->soc, &set_write);
 		}
 		
 		res = select (maxfd+1, &set_read, &set_write, NULL, bor_timer_delay());
@@ -74,24 +75,37 @@ void netcat_like(int soc){
 			/* Read on stdin ? */
 			if (FD_ISSET (0, &set_read)){
 				k = read(0, buf+buf_b, sizeof(buf)-buf_b-1);
-				if ( k < 0 ) { perror("read stdin"); close(soc); exit(1); }
+				if ( k < 0 ) { perror("read stdin"); close(config->soc); exit(1); }
 				if ( k == 0 ) { ERROR(L_DEBUG, "client: read 0 bytes on stdin\n"); boucle_princ = 0; }
 				//printf("client: read %d bytes in stdin\n", k);
 				buf_b += k;			
 			}
 			
 			/* Read on socket ? */
-			if (FD_ISSET (soc, &set_read)){
-				k = read(soc, buf+buf_b, sizeof(buf)-buf_b-1);
-				if ( k < 0 ) { perror("read socket"); close(soc); exit(1); }
+			if (FD_ISSET (config->soc, &set_read)){
+				if ( config->version == SOCKS5_SSL_V ){
+#ifdef HAVE_LIBSSL
+					k = SSL_read(config->socSsl, buf+buf_b, sizeof(buf)-buf_b-1);
+#endif
+				}else{
+					k = read(config->soc, buf+buf_b, sizeof(buf)-buf_b-1);
+				}
+				if ( k < 0 ) { perror("read socket"); close(config->soc); exit(1); }
 				if ( k == 0 ) { ERROR(L_DEBUG, "client: read 0 bytes!\n"); boucle_princ = 0; }
 				//printf("client: read %d bytes in socket\n", k);	
 				k = write(1, buf, k);
 			}
 			
 			/* Write on socket ? */
-			if(FD_ISSET (soc, &set_write)){
-				k = write(soc, buf+buf_a, buf_b - buf_a);
+			if(FD_ISSET (config->soc, &set_write)){
+				if ( config->version == SOCKS5_SSL_V ){
+#ifdef HAVE_LIBSSL
+					k = SSL_write(config->socSsl, buf+buf_a, buf_b - buf_a);
+#endif
+				}else{
+					k = write(config->soc, buf+buf_a, buf_b - buf_a);
+				}
+
 				if ( k < 0 ) { perror("write socket"); boucle_princ = 0; }
 				//printf("client: wrote %d bytes on socket\n", k);
 				buf_a += k;
@@ -113,25 +127,33 @@ void netcat_like(int soc){
 
 void netcat_socks(char *hostsocks, int portsocks, 
 				char *host, int port, 
-				char *uname, char *passwd, int ssl){
+				char *uname, char *passwd,
+				int ssl){
 
-	int soc;
-	
-	soc = new_socket_with_socks(hostsocks, portsocks,
-			host, port,
-			uname, passwd,
-			0, ssl);
+	ConfigClient config;
+	config.host = host;
+	config.port = port;
+	config.uname = uname;
+	config.passwd = passwd;
+#ifdef HAVE_LIBSSL
+	config.version = (ssl == 1) ? SOCKS5_SSL_V : SOCKS5_V;
+#else
+	config.version = SOCKS5_V;
+#endif
 
-	if ( soc < 0 ){
+	new_socket_with_socks(hostsocks, portsocks,
+			&config);
+
+	if ( config.soc < 0 ){
 		ERROR(L_NOTICE, "client: connection error");
 		exit(1);
 	}
 	
 	TRACE(L_VERBOSE, "client: established connection");
-	netcat_like(soc);
+	netcat_like(&config);
 	TRACE(L_VERBOSE, "client: close socket ...");
 	
-	close(soc);
+	close(config.soc);
 }
 
 void netcat_socks_bind(char *hostsocks, int portsocks, 
@@ -139,19 +161,31 @@ void netcat_socks_bind(char *hostsocks, int portsocks,
 				char *uname, char *passwd,
 				int ssl){
 
-	int soc_ec;
-	
-	soc_ec = new_socket_with_socks(hostsocks, portsocks, host, port, uname, passwd, 1, ssl);
-	if ( soc_ec < 0 ){
+	ConfigClient config;
+	config.host = host;
+	config.port = port;
+	config.uname = uname;
+	config.passwd = passwd;
+	config.bind = 1;
+#ifdef HAVE_LIBSSL
+	config.version = (ssl == 1) ? SOCKS5_SSL_V : SOCKS5_V;
+#else
+	config.version = SOCKS5_V;
+#endif
+
+	new_socket_with_socks(hostsocks, portsocks,
+			&config);
+
+	if ( config.soc < 0 ){
 		ERROR(L_NOTICE, "client: connection error");
 		exit(1);
 	}
 	
 	TRACE(L_VERBOSE, "client: established connection");
-	netcat_like(soc_ec);
+	netcat_like(&config);
 	TRACE(L_VERBOSE, "client: close socket ...");
 	
-	close(soc_ec);
+	close(config.soc);
 }
 
 struct globalArgs_t {
@@ -159,9 +193,12 @@ struct globalArgs_t {
 	unsigned int port;		// -p option
 	unsigned int listen;	// -l option
 	unsigned int verbosity;	// -v
+
 #ifdef HAVE_LIBSSL
-	unsigned int ssl;		// -s option
+	unsigned int ssl;		// -k option
+	char *cafile;			// -c option
 #endif
+
 	char *uname;			// -u option
 	char *passwd;			// -p option
 	
@@ -179,7 +216,7 @@ void usage(char *name){
 	printf("\t%s -s localhost:1080 -l 8080\n", name);
 	printf("Options:\n");
 #ifdef HAVE_LIBSSL
-	printf("\t--ssl      enable secure socks5 protocol\n");
+	printf("\t--ca  {cafile.crt} CA certificate of dst server (enable SSL)\n");
 #endif
 	printf("\t--verbose (increase verbose level)\n\n");
 	printf("\t--socks {host:port}\n");
@@ -198,7 +235,9 @@ void parseArg(int argc, char *argv[]){
 		static struct option long_options[] = {
 			{"help",    no_argument,       0, 'h'},
 			{"verbose", no_argument,       0, 'v'},
-			{"ssl",     no_argument,       0, 'k'},
+#ifdef HAVE_LIBSSL
+			{"ca",      required_argument, 0, 'c'},
+#endif
 			{"socks",   required_argument, 0, 's'},
 			{"uname",   required_argument, 0, 'u'},
 			{"passwd",  required_argument, 0, 'p'},
@@ -209,7 +248,7 @@ void parseArg(int argc, char *argv[]){
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
-		c = getopt_long (argc, argv, "h?vks:u:p:l:",
+		c = getopt_long (argc, argv, "h?vc:s:u:p:l:",
 					long_options, &option_index);
 
 		/* Detect the end of the options. */
@@ -235,6 +274,10 @@ void parseArg(int argc, char *argv[]){
 				break;
 
 #ifdef HAVE_LIBSSL
+			case 'c':
+				globalArgs.ssl = 1;
+				globalArgs.cafile = optarg;
+				break;
 			case 'k':
 				globalArgs.ssl = 1;
 				break;
@@ -301,9 +344,21 @@ void parseArg(int argc, char *argv[]){
 	}
 
 #ifdef HAVE_LIBSSL
-	if (globalArgs.ssl == 1){
+	/*Initialize ssl with the CA certificate file
+	 */
+	if (globalArgs.cafile != NULL){
 		SSL_load_error_strings();  /* readable error messages */
 		SSL_library_init();        /* initialize library */
+		TRACE(L_VERBOSE, "client: init ssl ...");
+		if (globalArgs.cafile == NULL){
+			ERROR(L_NOTICE, "client: actually need CA certificate file");
+			exit(1);
+		}
+		if ( ssl_init_client(globalArgs.cafile) != 0){
+			ERROR(L_NOTICE, "client: ssl config error");
+			exit(1);
+		}
+		TRACE(L_VERBOSE, "client: ssl ok.");
 	}
 #endif
 }
