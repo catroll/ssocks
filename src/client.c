@@ -51,7 +51,8 @@ void init_client (Client *c, int id, int mode, void *config)
     
     /* Start with no authentication set */
     c->auth = 0x00;
-    
+    c->ver = 0x00;
+
     /* First state in server mode */
     c->state = E_R_VER;
 

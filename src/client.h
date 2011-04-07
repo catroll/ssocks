@@ -68,6 +68,7 @@ typedef struct {
     int id;							/* ID in tc table */
 
     char auth;				/* Auth method define during the version check */
+    char ver;				/* Socks version SOCKS5_V, SOCKS5_SSL_V */
     int state;				/* Server state, define in socks5-common.h ...*/
     int stateC;				/* Client state, define in socks5-common.h */
     int mode;				/* Operating mode: M_SERVER, M_CLIENT, M_DYNAMIC */
