@@ -42,6 +42,8 @@ typedef struct {
 	
 	int loop;
 	int naskbind;
+
+	int version;
 } ConfigClient;
 
 
@@ -56,10 +58,10 @@ void read_auth_ack(Client *c);
 void write_request(Client *c);
 void read_request_ack(Client *c);
 
-int new_socket_with_socks(char *sockshost, int socksport, 
+int new_socket_with_socks(char *sockshost, int socksport,
 							char *host, int port,
 							char *uname, char *passwd,
-							int bind);
+							int bind, int ssl);
 
 
 

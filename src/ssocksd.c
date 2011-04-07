@@ -224,7 +224,7 @@ void server(int port){
     fd_set set_write;
     
     /* Init client tab */
-    for (nc = 0; nc < MAXCLI; nc++) init_client (&tc[nc], nc, 0, NULL);
+    for (nc = 0; nc < MAXCLI; nc++) init_client (&tc[nc], nc, 0, 0, NULL);
     
     soc_ec = new_listen_socket (port, 0);
     if (soc_ec < 0) goto fin_serveur;

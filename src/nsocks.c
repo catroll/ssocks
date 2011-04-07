@@ -113,11 +113,15 @@ void netcat_like(int soc){
 
 void netcat_socks(char *hostsocks, int portsocks, 
 				char *host, int port, 
-				char *uname, char *passwd){
+				char *uname, char *passwd, int ssl){
 
 	int soc;
 	
-	soc = new_socket_with_socks(hostsocks, portsocks, host, port, uname, passwd, 0);
+	soc = new_socket_with_socks(hostsocks, portsocks,
+			host, port,
+			uname, passwd,
+			0, ssl);
+
 	if ( soc < 0 ){
 		ERROR(L_NOTICE, "client: connection error");
 		exit(1);
@@ -132,11 +136,12 @@ void netcat_socks(char *hostsocks, int portsocks,
 
 void netcat_socks_bind(char *hostsocks, int portsocks, 
 				char *host, int port, 
-				char *uname, char *passwd){
+				char *uname, char *passwd,
+				int ssl){
 
 	int soc_ec;
 	
-	soc_ec = new_socket_with_socks(hostsocks, portsocks, host, port, uname, passwd, 1);
+	soc_ec = new_socket_with_socks(hostsocks, portsocks, host, port, uname, passwd, 1, ssl);
 	if ( soc_ec < 0 ){
 		ERROR(L_NOTICE, "client: connection error");
 		exit(1);
@@ -309,10 +314,21 @@ int main (int argc, char *argv[]){
 	if ( globalArgs.listen != 0 )
 		netcat_socks_bind(globalArgs.sockshost, globalArgs.socksport, 
 					"0.0.0.0", globalArgs.listen, 
-					globalArgs.uname, globalArgs.passwd);
+					globalArgs.uname, globalArgs.passwd,
+#ifdef HAVE_LIBSSL
+					globalArgs.ssl);
+#else
+					0);
+#endif
 	else
 		netcat_socks(globalArgs.sockshost, globalArgs.socksport, 
 					globalArgs.host, globalArgs.port, 
-					globalArgs.uname, globalArgs.passwd);	
+					globalArgs.uname, globalArgs.passwd,
+#ifdef HAVE_LIBSSL
+					globalArgs.ssl);
+#else
+					0);
+#endif
+
 	exit(0);
 }

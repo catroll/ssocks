@@ -30,6 +30,7 @@
 
 #include "client.h"
 
+#include <config.h>
 #include <stdint.h>
 
 #define SOCKS5_V 0x05

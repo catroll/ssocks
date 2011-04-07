@@ -99,7 +99,7 @@ void server(char *sockshost, int socksport, int port,
     fd_set set_write;
     
     /* Init client tab */
-    for (nc = 0; nc < MAXCLI; nc++) init_client (&tc[nc], nc, M_DYNAMIC, &config);
+    for (nc = 0; nc < MAXCLI; nc++) init_client (&tc[nc], nc, M_DYNAMIC, 0, &config);
     
     soc_ec = new_listen_socket (port, MAXCLI); 
     if (soc_ec < 0) goto fin_serveur;

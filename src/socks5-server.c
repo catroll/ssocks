@@ -40,6 +40,9 @@
 	#include <pthread.h>
 #endif
 
+#ifdef HAVE_LIBSSL
+	#include <openssl/ssl.h>
+#endif
 
 void dispatch_server (Client *c){
 	switch(c->state){
@@ -127,6 +130,7 @@ void read_version (Client *c){
 		if ( L_DEBUG <= verbosity ){
 			printf("server [%d]: ", c->id);
 		}
+
 		/* Copy in methods the methods in the packet
 		 * memcpy can do the trick too */
 		for (i=0; i <  req.nmethods; ++i){
@@ -143,16 +147,22 @@ void read_version (Client *c){
 		}
 		
 		/* Testing version */
-		if ( req.ver != SOCKS5_V ){
+		if(req.ver == SOCKS5_V){
+#ifdef HAVE_LIBSSL
+		}else if (globalArgsServer.ssl == 1 && req.ver == SOCKS5_SSL_V){
+#endif
+		}else{
 			ERROR(L_NOTICE, "server [%d]: wrong socks5 version", c->id);
 			disconnection (c);
 			return;
 		}
+
+		c->ver = req.ver;
 		
 		/* Searching valid methods:
 		 * Methods 0x00, no authentication
 		 *         0x01, GSSAPI no supported
-		 *         0x02 username/password RFC1929
+		 *         0x02, username/password RFC1929
 		 *
 		 * if method == no authentication
 		 * 		if guest available
@@ -185,6 +195,7 @@ void read_version (Client *c){
 			return;
 		}
 
+
 		/*
 		 * Version ack packet:
 		 *	+----+--------+
@@ -194,7 +205,7 @@ void read_version (Client *c){
 		 *	+----+--------+
 		 *
 		 *  Build ack */
-		res.ver = SOCKS5_V;
+		res.ver = c->ver;
 		res.method = c->auth;
 		
 		/* Copy in buffer for send */
@@ -225,6 +236,15 @@ void write_version_ack (Client *c){
     }
 
     if (c->req_b-c->req_a <= 0) {
+
+#ifdef HAVE_LIBSSL
+		/* Init SSL here
+		 */
+		if ( c->ver == SOCKS5_SSL_V){
+			TRACE(L_DEBUG, "server [%d]: socks5 ssl enable ...", c->id);
+		}
+#endif
+
 		if ( c->auth == 0x02 ) /* Username/Password authentication */
 			/* Next state read authentication */
 			c->state = E_R_AUTH;
@@ -460,7 +480,7 @@ void *thr_process_request( void *client ){
 		 *	| 1  |  1  | X'00' |  1   | Variable |    2     |
 		 *	+----+-----+-------+------+----------+----------+
 		 *  Build ack */
-		res.ver = SOCKS5_V;
+		res.ver = c->ver;
 		res.rsv = 0;
 		res.atyp = 0x01;
 
@@ -688,13 +708,13 @@ void build_request_bind(Client *c){
 	append_log_client(c, "ACCEPT %s", bor_adrtoa_in(&adrC_tmp));
 	
 	/* Build second request of bind see RFC */
-	res.ver = SOCKS5_V;
+	res.ver = c->ver;
 	/* 0x00 succeeded, 0x01 general SOCKS failure ... */
 	res.rep = (ok == 1) ? 0x00 : 0x01; 
 
 	res.rsv = 0;
 	res.atyp = 0x01;
-	/* TODO: set bndaddr and bndport see RFC
+	/* TODO: set bndaddr and bndport see RFC */
 	/* res.bndaddr = 0;
 	res.bndport = 0; */
 

@@ -30,6 +30,9 @@
 #include "net-util.h"
 #include "output-util.h"
 
+#ifdef HAVE_LIBSSL
+	#include <openssl/ssl.h>
+#endif
 
 void dispatch_client (Client *c){
 	switch(c->stateC){
@@ -64,7 +67,7 @@ void write_version(Client *c){
 		TRACE(L_DEBUG, "client: build version packet ...");
 
 		Socks5Version req;
-		req.ver = SOCKS5_V;
+		req.ver = ((ConfigClient*)c->config)->version;
 		req.nmethods = 0x02;
 		memcpy(c->req, &req, 2);
 
@@ -130,15 +133,15 @@ void read_version_ack(Client *c){
 		TRACE(L_DEBUG, "client: v0x%x, method 0x%02X", res.ver, res.method);
 		
 		/* Testing version */
-		if ( res.ver != SOCKS5_V ){
-			fprintf(stderr,"client: wrong socks5 version");
+		if(res.ver != c->ver){
+			ERROR(L_NOTICE, "server [%d]: wrong socks version", c->id);
 			disconnection (c);
 			return;
 		}
 
 		/* Server request method not supported */
 		if ( res.method != 0x00 && res.method != 0x02){
-			fprintf(stderr,"client: not supported auth method");
+			ERROR(L_VERBOSE, "client: not supported auth method");
 			disconnection (c);
 			return;
 		}
@@ -147,6 +150,15 @@ void read_version_ack(Client *c){
 		c->req_a = 0;
 		c->req_b = 0;
 		
+
+#ifdef HAVE_LIBSSL
+		/* Init SSL here
+		 */
+		if ( c->ver == SOCKS5_SSL_V){
+			TRACE(L_DEBUG, "client: socks5 ssl enable ...", c->id);
+		}
+#endif
+
 		/* Change state in function of the method */
 		if ( res.method == 0x02 )
 			c->stateC = E_W_AUTH;
@@ -331,7 +343,7 @@ void write_request(Client *c){
 		short port = htons(((ConfigClient*)c->config)->port);
 
 		/* Set the request */
-		req.ver = SOCKS5_V;
+		req.ver = c->ver;
 		req.cmd = (c->mode == M_CLIENT_BIND) ? 0x02 : 0x01;
 		req.rsv = 0x00;
 		req.atyp = 0x03;
@@ -406,7 +418,7 @@ void read_request_ack(Client *c){
 				inet_ntoa(res.bndaddr), ntohs(res.bndport));
 
 		/* Testing request ack */
-		if ( res.ver != SOCKS5_V ){
+		if ( res.ver != c->ver ){
 			ERROR(L_NOTICE, "client: wrong socks5 version");
 			disconnection (c);
 			return;
@@ -446,7 +458,7 @@ void read_request_ack(Client *c){
 int new_socket_with_socks(char *sockshost, int socksport,
 							char *host, int port,
 							char *uname, char *passwd,
-							int bind){
+							int bind, int ssl){
 	int maxfd = 0, res;
 	fd_set set_read, set_write;
     ConfigClient config;
@@ -460,9 +472,15 @@ int new_socket_with_socks(char *sockshost, int socksport,
 	config.passwd = passwd;
 	config.naskbind = 0;
 
+#ifdef HAVE_LIBSSL
+	config.version = (ssl == 1) ? SOCKS5_SSL_V : SOCKS5_V;
+#else
+	config.version = SOCKS5_V;
+#endif
+
 	/* Initialization of the structure client in client mode */
-	if ( bind ) init_client (&c, 0, M_CLIENT_BIND, &config);
-	else init_client (&c, 0, M_CLIENT, &config);
+	if ( bind ) init_client (&c, 0, M_CLIENT_BIND, config.version, &config);
+	else init_client (&c, 0, M_CLIENT, config.version, &config);
 
 	/* Make socket on the SOCKS server */
 	c.soc_stream = new_client_socket(sockshost, socksport, &c.addr, &c.addr_stream);
