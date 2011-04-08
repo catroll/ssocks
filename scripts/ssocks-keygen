@@ -1,0 +1,88 @@
+#!/bin/bash
+
+NAME=server
+LEN=2048
+DAYS=365
+TYPE=rsa
+FOLDER=./
+
+usage(){
+	echo "$0 generate private key and certificate for your ssocksd server"
+	echo "Usage: $0 name"
+	echo "       $0 -s {size} -t {type} -d {directory} name"
+	echo "       $0 -s 2048 -t rsa -d /etc/ssocksd/ server"
+	echo "       $0 -s 2048 -t dsa -d /etc/ssocksd/ server"
+	echo "       $0 server"
+	exit 1
+}
+
+# call usage() function if no argument supplied
+[[ $# -eq 0 ]] && usage
+
+MAX=0
+while getopts  "d:t:s:" flag
+do
+  #echo "$flag" $OPTIND $OPTARG
+  MAX=$OPTIND;
+  case $flag in
+  
+  	d)  if [ ! -d $OPTARG ] 
+		then 
+			echo "$OPTARG is not a valid folder" 
+  		fi
+	  	FOLDER=$OPTARG 
+	  	;;
+	  	
+  	t)  if [ "rsa" != "$OPTARG" ] && [ "dsa" != "$OPTARG" ] 
+  		then
+  			echo "$OPTARG is not a valid type, only rsa and dsa" 
+  			usage
+  		fi
+  		TYPE=$OPTARG 
+  		;;
+  		
+  	s) LEN=$OPTARG ;;
+  	
+  esac
+done
+NAME=$BASH_ARGV
+
+if [ -z "$NAME" ]
+then
+	usage
+fi
+
+echo "Generate a $TYPE ($LEN bit) private key $FOLDER$NAME.pem ..."
+openssl gen$TYPE -out $FOLDER$NAME.pem $LEN
+[[ $_ -ne $LEN ]] && echo "Error openssl command failed!" && exit 1
+
+echo "Creating a  certificate request $FOLDER$NAME.csr ..."
+openssl req -new -key $FOLDER$NAME.pem -out "$FOLDER$NAME.csr"
+
+echo "Creating a self-signed test certificate $FOLDER$NAME.crt ..."
+openssl x509 -req -days $DAYS -in $FOLDER$NAME.csr \
+	-signkey $FOLDER$NAME.pem -out $FOLDER$NAME.crt
+
+echo ""
+echo "Warning:"
+echo "Remember try to keep $FOLDER$NAME.pem private"
+echo "If it run in daemon with root right, this can be a good idea"
+echo "chown root:root $FOLDER$NAME.pem && chmod 600 $FOLDER$NAME.pem"
+echo ""
+echo "usage in ssocksd:"
+echo "	ssocksd -s -c $FOLDER$NAME.crt -k $FOLDER$NAME.pem"
+echo "	ssocksd -s -c $FOLDER$NAME.crt -k $FOLDER$NAME.pem -a /etc/ssocksd.auth"
+echo ""
+echo "usage with socks:"
+echo "You need give your certificate $FOLDER$NAME.crt to your clients"
+echo "They can use it like this:"
+echo "	ssocks --ca socksserver.crt -s socksserver:1080 -u admin -p abcde -l 1088"
+echo "And set browser proxy to 127.0.0.1 port 1088 and version socks5."
+echo "All data pass trought the localhost server and route to socksserver,"
+echo "so all data between the client and socksserver are encrypted."
+echo ""
+echo "To use it in daemon mode add this line below in your ssocksd.conf"
+echo "ssl = 1"
+echo "cert = $(readlink -f "$FOLDER$NAME.pem")"
+echo "key = $(readlink -f "$FOLDER$NAME.crt")"
+
