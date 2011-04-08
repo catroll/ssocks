@@ -50,7 +50,7 @@ struct globalArgs_t {
 
 #ifdef HAVE_LIBSSL
 	unsigned int ssl;		// -k option
-	char *cafile;			// -c option
+	char *certfile;			// -c option
 #endif
 
 	char *uname;			// -u option
@@ -85,7 +85,7 @@ void usage(char *name){
 	printf("\t--passwd {passwd}\n");
 	printf("\t--listen {port}\n");
 #ifdef HAVE_LIBSSL
-	printf("\t--ca  {cafile.crt} CA certificate of dst server (enable SSL)\n");
+	printf("\t--cert  {certfile.crt} Certificate of dst server (enable SSL)\n");
 #endif
 	printf("\t--background\n");
 	printf("\n");
@@ -181,7 +181,7 @@ void parseArg(int argc, char *argv[]){
 			{"passwd",  required_argument, 0, 'p'},
 			{"listen",  required_argument, 0, 'l'},
 #ifdef HAVE_LIBSSL
-			{"ca",      required_argument, 0, 'c'},
+			{"cert",      required_argument, 0, 'c'},
 #endif
 			{0, 0, 0, 0}
 		};
@@ -217,7 +217,7 @@ void parseArg(int argc, char *argv[]){
 #ifdef HAVE_LIBSSL
 			case 'c':
 				globalArgs.ssl = 1;
-				globalArgs.cafile = optarg;
+				globalArgs.certfile = optarg;
 				break;
 			case 'k':
 				globalArgs.ssl = 1;
@@ -280,15 +280,15 @@ void parseArg(int argc, char *argv[]){
 #ifdef HAVE_LIBSSL
 	/*Initialize ssl with the CA certificate file
 	 */
-	if (globalArgs.cafile != NULL){
+	if (globalArgs.certfile != NULL){
 		SSL_load_error_strings();  /* readable error messages */
 		SSL_library_init();        /* initialize library */
 		TRACE(L_VERBOSE, "client: init ssl ...");
-		if (globalArgs.cafile == NULL){
+		if (globalArgs.certfile == NULL){
 			ERROR(L_NOTICE, "client: actually need CA certificate file");
 			exit(1);
 		}
-		if ( ssl_init_client(globalArgs.cafile) != 0){
+		if ( ssl_init_client(globalArgs.certfile) != 0){
 			ERROR(L_NOTICE, "client: ssl config error");
 			exit(1);
 		}
