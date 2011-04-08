@@ -152,7 +152,14 @@ void netcat_socks(char *hostsocks, int portsocks,
 	TRACE(L_VERBOSE, "client: established connection");
 	netcat_like(&config);
 	TRACE(L_VERBOSE, "client: close socket ...");
-	
+
+#ifdef HAVE_LIBSSL
+	if (ssl == 1){
+		ssl_close(config.socSsl);
+		ssl_cleaning();
+	}
+#endif
+
 	close(config.soc);
 }
 

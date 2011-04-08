@@ -317,8 +317,11 @@ void server(int port){
     }   
 
 fin_serveur: 
+#ifdef HAVE_LIBSSL
+	if (globalArgsServer.ssl == 1)
+		ssl_cleaning();
+#endif
     TRACE(L_NOTICE, "server: closing sockets ...");
-
     if (soc_ec != -1) close (soc_ec);
     closeLog();
     for (nc = 0; nc < MAXCLI; nc++) raz_client (&tc[nc]);

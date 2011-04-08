@@ -159,9 +159,12 @@ void server(char *sockshost, int socksport, int port,
         }
     }   
 
-fin_serveur: 
+fin_serveur:
+#ifdef HAVE_LIBSSL
+	if (ssl == 1)
+		ssl_cleaning();
+#endif
     printf ("Server: closing sockets ...\n");
-
     if (soc_ec != -1) close (soc_ec); 
     for (nc = 0; nc < MAXCLI; nc++) raz_client (&tc[nc]);
 }
