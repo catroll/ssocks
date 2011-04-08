@@ -468,12 +468,13 @@ void read_request_ack(Client *c){
 		TRACE(L_VERBOSE, "client: pass through %s:%d",
 				inet_ntoa(res.bndaddr), ntohs(res.bndport));
 
-		/* Testing request ack */
+		/* Testing request ack
 		if ( res.ver != c->ver ){
 			ERROR(L_NOTICE, "client: wrong socks5 version");
 			disconnection (c);
 			return;
-		}
+		}*/
+
 		if ( res.rep != 0x00){
 			ERROR(L_VERBOSE, "client: socks request ack error!");
 			ERROR(L_NOTICE, "client: error, destination is unavailable!");

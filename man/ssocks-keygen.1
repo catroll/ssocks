@@ -1,0 +1,38 @@
+.\"   ssocks-keygen.1
+.\"
+.\"   Man page for socks
+.\"
+.TH ssocks-keygen 1 "3 Apr 2011" "ssocks-keygen" "ssocks manual"
+.SH NAME
+ssocks-keygen \- Get information about ssocks-keygen
+.SH SYNOPSIS
+	ssocks-keygen -s {size} -t {type} -d {directory} name
+	
+	ssocks-keygen name
+	
+.SH DESCRIPTION
+.B ssocks-keygen
+Generate SSL key and certificate to be used with ssocksd.
+
+.SH OPTIONS
+.IP "-t"
+Type of key rsa or dsa, default rsa
+.IP "-d"
+Directory, default current directory
+.IP "-s"
+Key size, default 2048
+.SH "EXAMPLES"
+Create 2048 bit private key in RSA format in /etc/ssocksd/key with name server
+
+	ssocks-keygen -s 2048 -t rsa -d /etc/ssocksd/key server
+
+Create 4096 bit private key in DSA format in /etc/ssocksd/key with name server
+
+	ssocks-keygen -s 4096 -t dsa -d /etc/ssocksd/key server
+
+Create 2048 bytes private key in RSA format in current directory with name server
+
+	ssocks-keygen -t rsa server
+
+.SH "SEE ALSO"
+.BR ssocksd (1), socksd (1), nsocks (1)

@@ -31,7 +31,8 @@ AC_FUNC_FORK
 AC_CHECK_FUNCS([atexit gethostbyname gettimeofday inet_ntoa memmove memset select socket strcasecmp strchr])
 
 AC_CONFIG_FILES([Makefile
-				man/Makefile
-				src/Makefile])
+		man/Makefile
+		src/Makefile
+		scripts/Makefile])
 
 AC_OUTPUT
