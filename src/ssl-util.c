@@ -52,6 +52,7 @@ int ssl_close(SSL *ssl){
 }
 
 void ssl_cleaning(){
+	TRACE(L_DEBUG, "server-ssl: cleaning ctx structure");
 	SSL_CTX_free(ctx);
 }
 
