@@ -39,6 +39,9 @@
 
 extern SSL_CTX *gCtx;
 
+int ssl_close(SSL *ssl);
+void ssl_cleaning();
+
 SSL *ssl_neogiciate_server(int soc);
 SSL *ssl_neogiciate_client(int soc);
 int ssl_init_server(char *certfile, char *privkeyfile, int type);

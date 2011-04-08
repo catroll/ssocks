@@ -36,8 +36,27 @@
 
 SSL_CTX *ctx;
 
+int ssl_close(SSL *ssl){
+	TRACE(L_DEBUG, "server-ssl: shutdown ..");
+	if ( ssl == NULL) {
+		ERROR(L_DEBUG, "server-ssl: ssl is null");
+		return -1;
+	}
+	if ( SSL_shutdown(ssl) != 1 ){
+		ERR_print_errors_fp(stderr);
+		return -1;
+	}
+	SSL_free(ssl);
+
+	return 0;
+}
+
+void ssl_cleaning(){
+	SSL_CTX_free(ctx);
+}
+
 /*TODO: Write a shutdown function for ssl */
-int ssl_init_client( char *serv_ca_cert){
+int ssl_init_client(char *serv_cert){
 	const SSL_METHOD *meth;
 
 	/* Create an SSL_METHOD structure
@@ -53,7 +72,7 @@ int ssl_init_client( char *serv_ca_cert){
 	/* Load the RSA CA certificate into the SSL_CTX structure
 	 * This will allow this client to verify the server's
 	 * certificate. */
-	if (SSL_CTX_load_verify_locations(ctx, serv_ca_cert, NULL) != 1) {
+	if (SSL_CTX_load_verify_locations(ctx, serv_cert, NULL) != 1) {
 		ERR_print_errors_fp(stderr);
 		return -1;
 	}

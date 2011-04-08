@@ -79,9 +79,11 @@ void init_client (Client *c, int id, int mode, int ver, void *config)
 
 /* Disconnection */
 void disconnection(Client *c) {
+
 	if ( c->mode == M_CLIENT || c->mode == M_CLIENT_BIND ){
 		TRACE(L_VERBOSE, "client: disconnected server ...");
 		if ( c->soc_stream != -1 ) { close(c->soc_stream); c->soc_stream = -1; }
+		if ( c->ver == SOCKS5_SSL_V ) { ssl_close(c->ssl); c->ssl = NULL; }
 	}else{
 		writeLog(c->buf_log);
 		TRACE(L_VERBOSE, "server [%d]: disconnected client ...", c->id);
@@ -107,6 +109,7 @@ void raz_client (Client *c){
     if ( c->soc  != -1) close (c->soc);
 	if ( c->soc_stream != -1 ) close(c->soc_stream);
 	if ( c->soc_bind != -1 ) close(c->soc_bind);
+	if ( c->ver == SOCKS5_SSL_V ) { ssl_close(c->ssl); }
     /* bor_timer_remove(tc[nc].handle); */
     init_client (c, c->id, c->mode, c->ver, c->config);
 }
