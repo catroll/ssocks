@@ -39,7 +39,7 @@ SSL_CTX *ctx;
 int ssl_close(SSL *ssl){
 	TRACE(L_DEBUG, "server-ssl: shutdown ..");
 	if ( ssl == NULL) {
-		ERROR(L_DEBUG, "server-ssl: ssl is null");
+		/* ERROR(L_DEBUG, "server-ssl: ssl is null"); */
 		return -1;
 	}
 	if ( SSL_shutdown(ssl) != 1 ){
