@@ -66,7 +66,7 @@ void usage(char *name){
 #ifdef HAVE_LIBSSL
 	printf("\t--ssl      enable secure socks5 protocol\n");
 	printf("\t--cert {file.crt}   set server certificate\n");
-	printf("\t--key  {prv.key}    set server private key\n");
+	printf("\t--key  {file.pem}    set server private key\n");
 #endif
 	printf("\t--daemon   daemon mode (background)\n");
 	printf("\t--verbose  increase verbose level\n\n");
