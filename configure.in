@@ -15,8 +15,20 @@ AM_INIT_AUTOMAKE
 
 # Checks for libraries.
 AC_CHECK_LIB(pthread, pthread_create)
-AC_CHECK_LIB(ssl, SSL_library_init)
 
+# Check SSL
+AC_ARG_WITH(ssl,
+[  --with-ssl enable ssl
+],
+[   AC_MSG_RESULT(Enable SSL ...)
+    AC_CHECK_LIB(ssl, SSL_library_init, 
+    	AM_CONDITIONAL(HAVE_SSL, /bin/true),
+    	AM_CONDITIONAL(HAVE_SSL, /bin/false))
+],
+[
+    AC_MSG_RESULT(No SSL ...)
+    AM_CONDITIONAL(HAVE_SSL, /bin/false)
+])
 
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h limits.h netdb.h stdlib.h string.h sys/socket.h sys/time.h unistd.h])
