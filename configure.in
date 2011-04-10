@@ -21,13 +21,12 @@ AC_ARG_WITH(ssl,
 [  --with-ssl enable ssl
 ],
 [   AC_MSG_RESULT(Enable SSL ...)
-    AC_CHECK_LIB(ssl, SSL_library_init, 
-    	AM_CONDITIONAL(HAVE_SSL, /bin/true),
-    	AM_CONDITIONAL(HAVE_SSL, /bin/false))
+    AC_CHECK_LIB(ssl, SSL_library_init)
+	AM_CONDITIONAL(WITH_SSL, /bin/true)
 ],
 [
     AC_MSG_RESULT(No SSL ...)
-    AM_CONDITIONAL(HAVE_SSL, /bin/false)
+    AM_CONDITIONAL(WITH_SSL, /bin/false)
 ])
 
 # Checks for header files.

@@ -15,7 +15,7 @@ log-util.c configd-util.c socks5-common.c auth-util.h bor-timer.h bor-util.h \
 client.h configd-util.h log-util.h net-util.h output-util.h \
 socks5-client.h socks5-server.h socks5-common.h ssocksd.conf ssocksd.auth  
 
-if HAVE_SSL
+if WITH_SSL
 ssocksd_SOURCES += ssl-util.h ssl-util.c
 nsocks_SOURCES += ssl-util.h ssl-util.c
 ssocks_SOURCES += ssl-util.h ssl-util.c
