@@ -92,7 +92,7 @@ void usage(char *name){
 	printf("Bug report %s\n", PACKAGE_BUGREPORT);
 }
 
-void server(char *sockshost, int socksport, int port,
+void server_relay(char *sockshost, int socksport, int port,
 		char *uname, char *passwd, int ssl){
     int soc_ec = -1, maxfd, res, nc;  
     fd_set set_read;
@@ -303,7 +303,7 @@ void parseArg(int argc, char *argv[]){
 
 int main (int argc, char *argv[]){
 	parseArg(argc, argv);
-	server(globalArgs.sockshost, globalArgs.socksport, globalArgs.listen,
+	server_relay(globalArgs.sockshost, globalArgs.socksport, globalArgs.listen,
 			globalArgs.uname, globalArgs.passwd,
 #ifdef HAVE_LIBSSL
 			globalArgs.ssl
