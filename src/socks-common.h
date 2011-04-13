@@ -172,7 +172,7 @@ typedef struct {
 #define WRITE_DISP(k, soc, buf) \
 	({ \
 		k = write_socks(soc, buf); \
-		if (k < 0){ close_socket(soc); break; } /* Error */ \
+		if (k < 0){ /* close_socket(soc); */ break; } /* Error */ \
 		if (k == 0) { break; } /* Need to write again */	\
 		init_buffer(buf); \
 	})
@@ -180,7 +180,7 @@ typedef struct {
 #define READ_DISP(k, soc, buf, minsize) \
 	({ \
 		k = read_socks(soc, buf, minsize); \
-		if (k < 0){ close_socket(soc); break; } /* Error */ \
+		if (k < 0){ /* close_socket(soc); */ break; } /* Error */ \
 		if (k == 0) { break; } /* Need to read again */ \
 	})
 

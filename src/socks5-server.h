@@ -49,10 +49,10 @@ int analyse_version(s_socks *s, s_socks_conf *c, s_buffer *buf);
 
 void dispatch_server(s_client *client, fd_set *set_read, fd_set *set_write);
 
-void dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind,
+int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind,
 		s_socks *socks, s_buffer *buf, s_buffer *buf_stream, s_socks_conf *conf);
 
-void dispatch_server_write(s_socket *soc, s_socks *socks,
+int dispatch_server_write(s_socket *soc, s_socks *socks,
 		s_buffer *buf, s_socks_conf *conf);
 
 /* TODO: Implement this function:
@@ -68,6 +68,9 @@ void init_select_server_cli (s_socket *soc,	s_socks *s, s_buffer *buf,
 
 void init_select_server (int soc_ec, s_client *tc, int *maxfd,
 		fd_set *set_read, fd_set *set_write);
+
+void init_select_server_reverse (s_client *tc, int *maxfd,
+		int ncon, fd_set *set_read, fd_set *set_write);
 
 #endif /* SOCKS5_SERVER__H */
 

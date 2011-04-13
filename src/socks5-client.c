@@ -196,10 +196,10 @@ int analyse_request_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 }
 
 
-void dispatch_client_write(s_socket *soc, s_socks *socks,
+int dispatch_client_write(s_socket *soc, s_socks *socks,
 		s_buffer *buf, s_socks_conf *conf)
 {
-	int k;
+	int k = 0;
 	switch(socks->state){
 		case S_W_VER:
 			if ( buf_empty(buf) )
@@ -224,22 +224,24 @@ void dispatch_client_write(s_socket *soc, s_socks *socks,
 			WRITE_DISP(k, soc, buf);
 			socks->state = S_R_REQ_ACK;
 			break;		
-		
+
 		case S_REPLY:
 			k = write_socks(soc, buf);
 			if (k < 0){ close_socket(soc);  break; } /* Error */
 			init_buffer(buf);
 			break;
-		
+
 		default:
 			break;
-	}		
+	}
+
+	return k;
 }
 
-void dispatch_client_read(s_socket *soc, s_socket *soc_stream,
+int dispatch_client_read(s_socket *soc, s_socket *soc_stream,
 		s_socks *socks, s_buffer *buf, s_buffer *buf_stream, s_socks_conf *conf)
 {
-	int k;
+	int k = 0;
 	switch(socks->state){
 		case S_R_VER_ACK:
 			READ_DISP(k, soc, buf, sizeof(Socks5VersionACK));
@@ -304,39 +306,45 @@ void dispatch_client_read(s_socket *soc, s_socket *soc_stream,
 		default:
 			break;
 	}
-
+	return k;
 }
 
 
 void dispatch_client(s_client *client, fd_set *set_read, fd_set *set_write)
 {
+	int k = 0;
 	/* Dispatch server socket */
 	if (client->soc.soc != -1 && FD_ISSET (client->soc.soc, set_read))
-		dispatch_client_read(&client->soc, &client->soc_stream,
+		k = dispatch_client_read(&client->soc, &client->soc_stream,
 				&client->socks, &client->buf, &client->stream_buf, client->conf);
 	else if (client->soc.soc != -1 && 
 			FD_ISSET (client->soc.soc, set_write))
-		dispatch_client_write(&client->soc, &client->socks, &client->buf, client->conf);
+		k = dispatch_client_write(&client->soc, &client->socks, &client->buf, client->conf);
+
+	if (k < 0){ disconnection(client); }
 }
 
 void dispatch_dynamic(s_client *client, fd_set *set_read, fd_set *set_write)
 {
+	int k = 0;
 	/* Dispatch server socket */
 	if (client->soc.soc != -1 && FD_ISSET (client->soc.soc, set_read))
-		dispatch_server_read(&client->soc, &client->soc_stream, &client->soc_bind,
+		k = dispatch_server_read(&client->soc, &client->soc_stream, &client->soc_bind,
 				&client->socks, &client->buf, &client->stream_buf, client->conf);
 
 	else if (client->soc.soc != -1 &&
 			FD_ISSET (client->soc.soc, set_write))
-		dispatch_server_write(&client->soc, &client->socks, &client->buf, client->conf);
+		k = dispatch_server_write(&client->soc, &client->socks, &client->buf, client->conf);
+	if (k < 0){ disconnection(client);	return;}
 
-	/* Dispatch server socket */
+	/* Dispatch stream socket */
 	if (client->soc_stream.soc != -1 && FD_ISSET (client->soc_stream.soc, set_read))
-		dispatch_client_read(&client->soc_stream, &client->soc,
+		k = dispatch_client_read(&client->soc_stream, &client->soc,
 				&client->socks_stream, &client->stream_buf, &client->buf, client->conf);
 	else if (client->soc_stream.soc != -1 &&
 			FD_ISSET (client->soc_stream.soc, set_write))
-		dispatch_client_write(&client->soc_stream, &client->socks_stream, &client->stream_buf, client->conf);
+		k = dispatch_client_write(&client->soc_stream, &client->socks_stream, &client->stream_buf, client->conf);
+	if (k < 0){ disconnection(client);	return;}
 
 	if (client->soc_bind.soc != -1 &&
 			FD_ISSET (client->soc_bind.soc, set_read)){
@@ -345,6 +353,7 @@ void dispatch_dynamic(s_client *client, fd_set *set_read, fd_set *set_write)
 			client->socks.state = S_W_REQ_ACK;
 		}
 	}
+
 }
 
 void init_select_client (s_socket *soc, s_socks *s, s_buffer *buf, int *maxfd,

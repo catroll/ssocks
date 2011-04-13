@@ -455,10 +455,10 @@ int build_request_accept_bind(s_socks *s, s_socks_conf *c,
 	return 0;
 }
 
-void dispatch_server_write(s_socket *soc, s_socks *socks,
+int dispatch_server_write(s_socket *soc, s_socks *socks,
 		s_buffer *buf, s_socks_conf *conf)
 {
-	int k;
+	int k = 0;
 	switch(socks->state){
 		case S_W_VER_ACK:
 			WRITE_DISP(k, soc, buf);
@@ -473,7 +473,7 @@ void dispatch_server_write(s_socket *soc, s_socks *socks,
 		case S_W_AUTH_ACK:
 			WRITE_DISP(k, soc, buf);
 			if ( socks->auth == 0 ){
-				close_socket(soc);
+				/* close_socket(soc); */
 				break;
 			}
 
@@ -486,7 +486,7 @@ void dispatch_server_write(s_socket *soc, s_socks *socks,
 			if ( socks->listen == 1 ){
 				socks->state = S_WAIT;
 			}else if ( socks->connected == 0 ){
-				close_socket(soc);
+				/* close_socket(soc); */
 			}else{
 				socks->state = S_REPLY;
 			}
@@ -494,18 +494,20 @@ void dispatch_server_write(s_socket *soc, s_socks *socks,
 
 		case S_REPLY:
 				k = write_socks(soc, buf);
-				if (k < 0){ close_socket(soc); break; } /* Error */
+				if (k < 0){ /* close_socket(soc); */ break; } /* Error */
 				init_buffer(buf);
 			break;
 
 		default:
 			break;
 	}
+
+	return k;
 }
 
-void dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind,
+int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind,
 		s_socks *socks, s_buffer *buf, s_buffer *buf_stream, s_socks_conf *conf){
-	int k;
+	int k = 0;
 	struct sockaddr_in adrC, adrS;
 
 	switch(socks->state){
@@ -514,7 +516,7 @@ void dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bin
 
 			k = analyse_version(socks, conf,
 								buf);
-			if (k < 0){ close_socket(soc); break; } /* Error */
+			if (k < 0){ /* close_socket(soc); */ break; } /* Error */
 
 			build_version_ack(socks, conf,
 								buf);
@@ -528,7 +530,7 @@ void dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bin
 
 			k = analyse_auth(socks, conf,
 								buf);
-			if (k < 0){ close_socket(soc); break; } /* Error */
+			if (k < 0){ /* close_socket(soc); */ break; } /* Error */
 
 			build_auth_ack(socks, conf,
 								buf);
@@ -547,7 +549,8 @@ void dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bin
 
 				if ( soc_stream->soc < 0 ){
 					ERROR(L_NOTICE, "client: connection to socks5 server impossible!");
-					close_socket(soc);
+					k = -1;
+					/* close_socket(soc); */
 				}
 
 				socks->state = S_WAIT;
@@ -560,7 +563,7 @@ void dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bin
 								soc_stream, soc_bind,
 								 conf, buf);
 
-			if (k < 0){ close_socket(soc); break; } /* Error */
+			if (k < 0){ /* close_socket(soc); */ break; } /* Error */
 
 			build_request_ack(socks, conf,
 								soc_stream, soc_bind,
@@ -573,28 +576,29 @@ void dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bin
 		case S_REPLY:
 			if ( buf_free(buf_stream) > 0 ){
 				k = read_socks(soc, buf_stream, 0);
-				if (k < 0){ close_socket(soc); break; } /* Error */
+				if (k < 0){ /* close_socket(soc); */ break; } /* Error */
 			}
 			break;
 		default:
 			break;
 	}
-
+	return k;
 }
 
 
 void dispatch_server(s_client *client, fd_set *set_read, fd_set *set_write)
 {
-	int k;
+	int k = 0;
 	
 	/* Dispatch server socket */
 	if (client->soc.soc != -1 && FD_ISSET (client->soc.soc, set_read))
-		dispatch_server_read(&client->soc, &client->soc_stream, &client->soc_bind,
+		k = dispatch_server_read(&client->soc, &client->soc_stream, &client->soc_bind,
 				&client->socks, &client->buf, &client->stream_buf, client->conf);
 
 	else if (client->soc.soc != -1 && 
 			FD_ISSET (client->soc.soc, set_write))
-		dispatch_server_write(&client->soc, &client->socks, &client->buf, client->conf);
+		k = dispatch_server_write(&client->soc, &client->socks, &client->buf, client->conf);
+	if (k < 0){ disconnection(client); }
 	
 	/* Dispatch stream socket */
 	if (client->soc_stream.soc != -1 
@@ -665,7 +669,7 @@ void init_select_server (int soc_ec, s_client *tc, int *maxfd,
 		fd_set *set_read, fd_set *set_write)
 {
     int nc;
-
+    /* TODO: move FD_ZERO */
     FD_ZERO (set_read);
     FD_ZERO (set_write);
     FD_SET (soc_ec, set_read);
@@ -685,5 +689,55 @@ void init_select_server (int soc_ec, s_client *tc, int *maxfd,
 			FD_SET(client->soc_bind.soc, set_read);
 			if (client->soc_bind.soc > *maxfd) *maxfd = client->soc_bind.soc;
 		}
+	}
+}
+
+void init_select_server_reverse (s_client *tc, int *maxfd,
+		int ncon, fd_set *set_read, fd_set *set_write)
+{
+	/* Security to avoid segmentation fault on tc tab */
+	if ( ncon >= MAXCLI ) ncon = MAXCLI-1;
+
+    int nc, cpt = 0;
+
+    FD_ZERO (set_read);
+    FD_ZERO (set_write);
+
+    *maxfd = 0;
+    for (nc = 0; nc < MAXCLI; nc++){
+		s_client *client = &tc[nc];
+
+		/* Count available connection */
+		if ( client->soc.soc != -1 ) cpt++;
+
+		init_select_server_cli(&client->soc, &client->socks, &client->buf,
+				maxfd, set_read, set_write);
+
+		init_select_server_stream(&client->soc_stream, &client->stream_buf,
+				maxfd, set_read, set_write);
+
+
+		if ( client->soc_bind.soc != -1 ){
+			FD_SET(client->soc_bind.soc, set_read);
+			if (client->soc_bind.soc > *maxfd) *maxfd = client->soc_bind.soc;
+		}
+	}
+
+    /* */
+	while(cpt < ncon){
+		/* Open connection to the socks client */
+		for (nc = 0; nc < MAXCLI; nc++) if ( tc[nc].soc.soc == -1 ) break;
+		if (nc >= MAXCLI) return;
+		tc[nc].soc.soc = new_client_socket(tc[nc].conf->config.cli->sockshost,
+				tc[nc].conf->config.cli->socksport, &tc[nc].soc.adrC,
+				&tc[nc].soc.adrS);
+		if ( tc[nc].soc.soc < 0 ){
+			TRACE(L_DEBUG, "client: connection to %s error",
+					tc[nc].conf->config.cli);
+			return;
+		}
+		init_select_server_cli(&tc[nc].soc, &tc[nc].socks, &tc[nc].buf,
+				maxfd, set_read, set_write);
+		cpt++;
 	}
 }

@@ -1,5 +1,13 @@
 AM_CFLAGS=-Wall 
-bin_PROGRAMS = ssocksd nsocks ssocks
+bin_PROGRAMS = ssocksd nsocks ssocks rssocks rcsocks
+
+rcsocks_SOURCES =  auth-util.c  bor-util.c  client.c  configd-util.c  \
+log-util.c  net-util.c  output-util.c  socks5-client.c  socks5-server.c \
+socks-common.c rcsocks.c 
+
+rssocks_SOURCES =  auth-util.c  bor-util.c  client.c  configd-util.c  \
+log-util.c  net-util.c  output-util.c  socks5-client.c  socks5-server.c \
+socks-common.c rssocks.c 
 
 ssocks_SOURCES =  auth-util.c  bor-util.c  client.c  configd-util.c  \
 log-util.c  net-util.c  output-util.c  socks5-client.c  socks5-server.c \
@@ -21,6 +29,8 @@ if WITH_SSL
 ssocksd_SOURCES += ssl-util.h ssl-util.c
 nsocks_SOURCES += ssl-util.h ssl-util.c
 ssocks_SOURCES += ssl-util.h ssl-util.c
+rssocks_SOURCES += ssl-util.h ssl-util.c
+rcsocks_SOURCES += ssl-util.h ssl-util.c
 endif
 
 # sysconf_DATA = ssocksd.conf ssocksd.auth

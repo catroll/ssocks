@@ -38,10 +38,11 @@ void build_request(s_socks *s, s_socks_conf *c, s_buffer *buf);
 int analyse_request_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
 
 
-void dispatch_client_write(s_socket *soc, s_socks *socks,
+int dispatch_client_write(s_socket *soc, s_socks *socks,
 		s_buffer *buf, s_socks_conf *conf);
-void dispatch_client_read(s_socket *soc, s_socket *soc_stream,
+int dispatch_client_read(s_socket *soc, s_socket *soc_stream,
 		s_socks *socks, s_buffer *buf, s_buffer *buf_stream, s_socks_conf *conf);
+
 void dispatch_client(s_client *client, fd_set *set_read, fd_set *set_write);
 
 void dispatch_dynamic(s_client *client, fd_set *set_read, fd_set *set_write);

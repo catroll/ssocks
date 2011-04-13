@@ -49,10 +49,12 @@ void init_client (s_client *c, int id, int mode, s_socks_conf *conf)
 
 void disconnection(s_client *c)
 {
+	if ( c->soc_stream.soc != -1 || c->soc_bind.soc != -1 || c->soc.soc != -1 )
+		TRACE(L_VERBOSE, "server [%d]: disconnected client ...", c->id);
+
 	close_socket(&c->soc_stream);
 	close_socket(&c->soc_bind);
 	close_socket(&c->soc);
-	TRACE(L_VERBOSE, "server [%d]: disconnected client ...", c->id);
 	
 	init_client(c, c->id, c->socks.mode, c->conf);
 }
