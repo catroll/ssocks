@@ -1,19 +1,21 @@
-AM_CFLAGS=-Wall -std=gnu99 -O2 -Wextra
-bin_PROGRAMS = nsocks ssocks ssocksd
+AM_CFLAGS=-Wall 
+bin_PROGRAMS = ssocksd nsocks ssocks
 
-ssocks_SOURCES = bor-timer.c bor-util.c client.c net-util.c \
-socks5-client.c socks5-server.c ssocks.c output-util.c auth-util.c\
-log-util.c socks5-common.c
+ssocks_SOURCES =  auth-util.c  bor-util.c  client.c  configd-util.c  \
+log-util.c  net-util.c  output-util.c  socks5-client.c  socks5-server.c \
+socks-common.c ssocks.c 
 
-nsocks_SOURCES = bor-timer.c bor-util.c client.c net-util.c \
-nsocks.c socks5-client.c socks5-server.c output-util.c auth-util.c \
-log-util.c socks5-common.c
+nsocks_SOURCES =  auth-util.c  bor-util.c  client.c  configd-util.c  \
+log-util.c  net-util.c  output-util.c  socks5-client.c  socks5-server.c \
+socks-common.c nsocks.c 
 
-ssocksd_SOURCES = bor-timer.c bor-util.c client.c net-util.c \
-socks5-client.c socks5-server.c ssocksd.c output-util.c auth-util.c  \
-log-util.c configd-util.c socks5-common.c auth-util.h bor-timer.h bor-util.h \
-client.h configd-util.h log-util.h net-util.h output-util.h \
-socks5-client.h socks5-server.h socks5-common.h ssocksd.conf ssocksd.auth  
+ssocksd_SOURCES =  auth-util.c  bor-util.c  client.c  configd-util.c  \
+log-util.c  net-util.c  output-util.c  socks5-client.c  socks5-server.c \
+socks-common.c ssocksd.c \
+\
+auth-util.h  bor-util.h  client.h  configd-util.h  log-util.h  net-util.h \
+output-util.h  socks5-client.h  socks5-server.h  socks-common.h 
+
 
 if WITH_SSL
 ssocksd_SOURCES += ssl-util.h ssl-util.c
@@ -21,4 +23,4 @@ nsocks_SOURCES += ssl-util.h ssl-util.c
 ssocks_SOURCES += ssl-util.h ssl-util.c
 endif
 
-sysconf_DATA = ssocksd.conf ssocksd.auth
+# sysconf_DATA = ssocksd.conf ssocksd.auth

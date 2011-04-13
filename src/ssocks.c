@@ -1,7 +1,7 @@
 /*
  *      ssocks.c
  *      
- *      Created on: 2011-03-31
+ *      Created on: 2011-04-12
  *      Author:     Hugo Caron
  *      Email:      <h.caron@codsec.com>
  * 
@@ -27,13 +27,13 @@
  */
 
 #include "bor-util.h"
-#include "bor-timer.h"
+
 #include "net-util.h"
 #include "output-util.h"
 
 #include "socks5-client.h"
 #include "socks5-server.h"
-#include "socks5-common.h"
+#include "socks-common.h"
 
 #include <config.h>
 #include <getopt.h>
@@ -97,24 +97,46 @@ void server_relay(char *sockshost, int socksport, int port,
     int soc_ec = -1, maxfd, res, nc;  
     fd_set set_read;
     fd_set set_write;
-    Client tc[MAXCLI]; 
-    ConfigDynamic config;
+    
+    s_client tc[MAXCLI];
 
-    config.host = sockshost;
-    config.port = socksport;
-    config.uname = uname;
-    config.passwd = passwd;
-#ifdef HAVE_LIBSSL
-	config.version = (ssl == 1) ? SOCKS5_SSL_V : SOCKS5_V;
-#else
-	config.version = SOCKS5_V;
-#endif
+	s_socks_conf conf;
+	s_socks_client_config config_cli;
+	s_socks_server_config config_srv;
 
+	conf.config.cli = &config_cli;
+	conf.config.srv = &config_srv;
+
+	char method[] =  { 0x00, 0x02 };
+	char version[] = { SOCKS5_V };
+	conf.config.srv->n_allowed_version = 1;
+	conf.config.srv->allowed_version = version;
+	conf.config.srv->n_allowed_method = 1;
+	conf.config.srv->allowed_method = method;
+
+
+	conf.config.cli->n_allowed_method = 2;
+	conf.config.cli->allowed_method = method;
+
+	/* If no username or password  we don't use auth */
+	if ( uname == NULL || passwd == NULL )
+		--conf.config.cli->n_allowed_method;
+
+	conf.config.cli->loop = 1;
+	conf.config.cli->host = NULL;
+	conf.config.cli->port = 0;
+	conf.config.cli->sockshost = sockshost;
+	conf.config.cli->socksport = socksport;
+	conf.config.cli->username = uname;
+	conf.config.cli->password = passwd;
+	conf.config.cli->version = version[0];
 
     /* Init client tab */
-    for (nc = 0; nc < MAXCLI; nc++) init_client (&tc[nc], nc, M_DYNAMIC, 0, &config);
-    
-    soc_ec = new_listen_socket (port, MAXCLI); 
+    for (nc = 0; nc < MAXCLI; nc++) init_client (&tc[nc], nc, M_DYNAMIC, &conf);
+
+
+    struct sockaddr_in addrS;
+    soc_ec = new_listen_socket (port, MAXCLI, &addrS);
     if (soc_ec < 0) goto fin_serveur;
     
 	if ( globalArgs.background == 1 ){
@@ -130,25 +152,14 @@ void server_relay(char *sockshost, int socksport, int port,
     while (boucle_princ) {
         init_select_dynamic (soc_ec, tc, &maxfd, &set_read, &set_write);
         
-        res = select (maxfd+1, &set_read, &set_write, NULL, bor_timer_delay());
+        res = select (maxfd+1, &set_read, &set_write, NULL, NULL);
 
         if (res > 0) {  /* Search eligible sockets */
             if (FD_ISSET (soc_ec, &set_read))
-                if (new_connection (soc_ec, tc) < 0) goto fin_serveur;
+                new_connection (soc_ec, tc);
             
             for (nc = 0; nc < MAXCLI; nc++){
-				//if ( tc[nc].state != E_WAIT ){
-					if (tc[nc].soc != -1 && FD_ISSET (tc[nc].soc, &set_read))
-						dispatch_server (&tc[nc]);
-					else if (tc[nc].soc != -1 && FD_ISSET (tc[nc].soc, &set_write))
-						dispatch_server (&tc[nc]);
-                //}
-                    
-				if (tc[nc].soc_stream != -1 && FD_ISSET (tc[nc].soc_stream, &set_read)){
-					dispatch_client(&tc[nc]);
-				}else if(tc[nc].soc_stream != -1 && FD_ISSET (tc[nc].soc_stream, &set_write)){
-					dispatch_client(&tc[nc]);
-				}
+            	dispatch_dynamic(&tc[nc], &set_read, &set_write);
 			}
                 
         } else if ( res == 0){
@@ -166,7 +177,7 @@ fin_serveur:
 #endif
     printf ("Server: closing sockets ...\n");
     if (soc_ec != -1) close (soc_ec); 
-    for (nc = 0; nc < MAXCLI; nc++) raz_client (&tc[nc]);
+    //for (nc = 0; nc < MAXCLI; nc++) raz_client (&tc[nc]);
 }
 
 

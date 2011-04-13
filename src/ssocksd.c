@@ -27,11 +27,12 @@
  */
 
 #include "net-util.h"
-#include "bor-timer.h"
+#include "bor-util.h"
 #include "output-util.h"
+#include "client.h"
 
+#include "socks-common.h"
 #include "socks5-server.h"
-#include "socks5-common.h"
 
 #include "auth-util.h"
 #include "log-util.h"
@@ -40,8 +41,6 @@
 #include <getopt.h>
 #include <unistd.h>
 #include <config.h>
-
-
 
 #define DEFAULT_PORT 1080
 #define PID_FILE "/var/run/ssocksd.pid"
@@ -173,7 +172,7 @@ void parseArg(int argc, char *argv[]){
 			case 'f':
 				strcpy(globalArgsServer.fileconfig, optarg);
 				if ( loadConfigFile(optarg, &globalArgsServer) < 0 ){
-					ERROR(L_NOTICE, "config: config file error\n");
+					ERROR(L_NOTICE, "config: config file error");
 					ERROR(L_NOTICE, "server: can't start configuration error");
 					exit(1);
 				}
@@ -239,14 +238,27 @@ void capte_usr1(){
 
 void server(int port){
     int soc_ec = -1, maxfd, res, nc;  
-    Client tc[MAXCLI];  
+    s_client tc[MAXCLI];  
     fd_set set_read;
     fd_set set_write;
+    struct sockaddr_in addrS;
+    
+    char methods[2] = { 0x00, 0x02 };
+    char versions[2] = { 0x05, 0 };
+    
+    s_socks_conf conf;
+    s_socks_server_config config;
+    conf.config.srv = &config;
+
+    config.allowed_version = versions;
+    config.allowed_method = methods;
+    config.n_allowed_method = 2;
     
     /* Init client tab */
-    for (nc = 0; nc < MAXCLI; nc++) init_client (&tc[nc], nc, 0, 0, NULL);
+    for (nc = 0; nc < MAXCLI; nc++) 
+		init_client (&tc[nc], nc, M_SERVER, &conf);
     
-    soc_ec = new_listen_socket (port, 0);
+    soc_ec = new_listen_socket (port, 0, &addrS);
     if (soc_ec < 0) goto fin_serveur;
     
 	
@@ -269,47 +281,21 @@ void server(int port){
     bor_signal (SIGUSR1, capte_usr1, SA_RESTART);
 
     while (boucle_princ) {
-        init_select (soc_ec, tc, &maxfd, &set_read, &set_write);
+        init_select_server (soc_ec, tc, &maxfd, &set_read, &set_write);
         
         res = select (maxfd+1, &set_read, &set_write, NULL, NULL);
 
         if (res > 0) { /* Search eligible sockets */
+        
             if (FD_ISSET (soc_ec, &set_read))
-                if (new_connection (soc_ec, tc) < 0) goto fin_serveur;
+                new_connection (soc_ec, tc);
             
             for (nc = 0; nc < MAXCLI; nc++){
-				
-                if (tc[nc].soc != -1 && FD_ISSET (tc[nc].soc, &set_read))
-                    dispatch_server(&tc[nc]);
-
-                else if (tc[nc].soc != -1 &&
-                		FD_ISSET (tc[nc].soc, &set_write))
-                    dispatch_server(&tc[nc]);
-                
-
-                if (tc[nc].soc_stream != -1 &&
-                		FD_ISSET (tc[nc].soc_stream, &set_read))
-                    read_client (&tc[nc]);
-
-                else if (tc[nc].soc_stream != -1 &&
-                		FD_ISSET (tc[nc].soc_stream, &set_write))
-                    write_client (&tc[nc]);
-                    
-
-                 if (tc[nc].soc_bind != -1 &&
-                		 FD_ISSET (tc[nc].soc_bind, &set_read))
-					build_request_bind(&tc[nc]);
+				dispatch_server(&tc[nc], &set_read, &set_write);
 			}
                 
         } else if ( res == 0){
-
-            //int handle = bor_timer_handle();
-            /*for (nc = 0; nc < MAXCLI; nc++)
-                if (tc[nc].handle == handle){
-                    TRACE(L_VERBOSE, "server [%d]: client timeout\n", nc);
-                    disconnection (tc, nc);
-                }*/
-                
+ 
         }else if (res < 0) { 
             if (errno == EINTR) ; /* Received signal, it does nothing */
             else { perror ("select"); goto fin_serveur; }
@@ -324,7 +310,7 @@ fin_serveur:
     TRACE(L_NOTICE, "server: closing sockets ...");
     if (soc_ec != -1) close (soc_ec);
     closeLog();
-    for (nc = 0; nc < MAXCLI; nc++) raz_client (&tc[nc]);
+    //for (nc = 0; nc < MAXCLI; nc++) d (&tc[nc]);
     if ( globalArgsServer.daemon == 1 )	removePID(PID_FILE);
 }
 

@@ -72,33 +72,32 @@ int build_addr_server(char *name, int port, struct sockaddr_in *addr){
 /*
  * TODO: Choose what interface bind
  */
-int new_listen_socket (int nport, int backlog){
+int new_listen_socket (int nport, int backlog, struct sockaddr_in *addrS){
     int soc_ec;
-    struct sockaddr_in addrS;
     
     /* Internet domain socket creation in connected mode */
     soc_ec = socket (AF_INET, SOCK_STREAM, 0);
     if (soc_ec < 0) { perror ("socket ip"); return -1; }
 
     /* Making local address */
-    addrS.sin_family = AF_INET;
-    addrS.sin_port = htons (nport);      /* 0 for award of a free port */
-    addrS.sin_addr.s_addr = htonl(INADDR_ANY);  /* All Local addresses */
+    addrS->sin_family = AF_INET;
+    addrS->sin_port = htons (nport);      /* 0 for award of a free port */
+    addrS->sin_addr.s_addr = htonl(INADDR_ANY);  /* All Local addresses */
 
     /* Attachment socket to the server address */
     TRACE(L_DEBUG, "server: attachment socket server ...");
-    if (bor_bind_in (soc_ec, &addrS) == -1)
+    if (bor_bind_in (soc_ec, addrS) == -1)
       { close (soc_ec); return -1; }
       
     /* Recovery of the port as network endian */
-    if (bor_getsockname_in (soc_ec, &addrS) < 0)
+    if (bor_getsockname_in (soc_ec, addrS) < 0)
       { perror ("getsockname ip"); close (soc_ec); return -1; }
-    TRACE(L_DEBUG, "server: port %d open", ntohs(addrS.sin_port));
+    TRACE(L_DEBUG, "server: port %d open", ntohs(addrS->sin_port));
       
     /* Ouverture du service ; le second param est le nb max de connexions
        pendantes, limité à SOMAXCONN (=128 sur Linux) */
     if (listen (soc_ec, backlog) < 0) { perror ("listen"); return -1; }
-    TRACE(L_NOTICE, "server: listening on %s", bor_adrtoa_in (&addrS));
+    TRACE(L_NOTICE, "server: listening on %s", bor_adrtoa_in (addrS));
     
     return soc_ec;
 }

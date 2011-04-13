@@ -1,7 +1,7 @@
 /*
  *      socks5-server.c
  *      
- *      Created on: 2011-03-30
+ *      Created on: 2011-04-11
  *      Author:     Hugo Caron
  *      Email:      <h.caron@codsec.com>
  * 
@@ -25,738 +25,665 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
+#include "socks-common.h"
 #include "socks5-server.h"
-#include "socks5-common.h"
-
 #include "net-util.h"
-#include "output-util.h"
+
 #include "auth-util.h"
-#include "log-util.h"
-#include "configd-util.h"
+#include "bor-util.h"
 
-#include <config.h> /* HAVE_LIBPTHREAD */
-
-#ifdef HAVE_LIBPTHREAD
-	#include <pthread.h>
-#endif
-
-void dispatch_server (Client *c){
-	switch(c->state){
-		case E_R_VER: read_version(c); break;
-		case E_W_VER_ACK: write_version_ack(c); break;
-		case E_R_AUTH: read_auth(c); break;
-		case E_W_AUTH_ACK: write_auth_ack(c); break;
-		case E_R_REQ:
-			if ( c->mode == M_DYNAMIC) /* Used by ssocks */
-				read_request_dynamic(c);
-			else
-				read_request(c);
-			break;
-		case E_W_REQ_ACK: write_request_ack(c); break;
-		case E_REPLY :
-			(c->buf_client_w == 1) ? write_server(c) : read_server(c);
-			break;
-		default : break;
-	}
-
-}
-
-
-/* Read the client version and build the ack in buffer req
- *
- * Version packet:
+/* Version packet:
  *	+----+----------+----------+
  *	|VER | NMETHODS | METHODS  |
  *	+----+----------+----------+
  *	| 1  |    1     | 1 to 255 |
  *	+----+----------+----------+
- *
+ */
+int analyse_version(s_socks *s, s_socks_conf *c, s_buffer *buf){
+	int i, j;
+	Socks5Version req;
+	TRACE(L_DEBUG, "server [%d]: testing version ...", 
+		s->id);
+	
+	memcpy(&req, buf->data, sizeof(Socks5Version));
+
+	/* If too much method we truncate */
+	if (sizeof(req.methods) < (unsigned int)req.nmethods){
+		ERROR(L_VERBOSE, "server [%d]: truncate methods", 
+			s->id);
+		req.nmethods = sizeof(req.methods);
+	}
+	
+	/* Show only in debug mode */
+	if ( L_DEBUG <= verbosity ){
+		printf("server [%d]: methods ", s->id);
+	}
+
+	/* Copy in methods the methods in the packet
+	 * memcpy can do the trick too */
+	for (i=0; i <  req.nmethods; ++i){
+		req.methods[i] = *(buf->data + 2 + i );
+		/* Show only in debug mode */
+		if ( L_DEBUG <= verbosity ){
+			printf("0x%02X,",req.methods[i]);
+		}
+	}
+
+	/* Show only in debug mode */
+	if ( L_DEBUG <= verbosity ){
+		printf("\n");
+	}
+	
+	/* Testing version */
+	char *allowed = c->config.srv->allowed_version;
+	while ( *allowed != 0 ){
+		if ( *allowed == req.ver ){
+			s->version = *allowed;
+			TRACE(L_DEBUG, "server [%d]: version %d", 
+				s->id, s->version);
+			break;
+		}
+		allowed++;
+	}
+	
+	/* No valid version find */
+	if ( s->version == -1 ){
+		ERROR(L_VERBOSE, "server [%d]: version error (%d)", 
+			s->id, req.ver);	
+		return -1;	
+	}
+	
+	/* Searching valid methods:
+	 * Methods 0x00, no authentication
+	 *         0x01, GSSAPI no supported
+	 *         0x02, username/password RFC1929
+	 */
+	for (i=0; i <  req.nmethods && s->method == -1; ++i){
+		for (j = 0; j < c->config.srv->n_allowed_method; ++j ){
+			if ( c->config.srv->allowed_method[j] == req.methods[i] ){
+				s->method = c->config.srv->allowed_method[j];
+				break;
+			}
+		}		
+	}
+	
+	/* No valid method find */
+	if ( s->method == -1 ){
+		ERROR(L_VERBOSE, "server [%d]: method not supported", 
+			s->id);	
+		return -2;	
+	}
+	
+	return 0;
+}
+
+/*
  * Version ack packet:
  *	+----+--------+
  *	|VER | METHOD |
  *	+----+--------+
  *	| 1  |   1    |
  *	+----+--------+
- *
  */
-void read_version (Client *c){
-    int k, i, ok = 0;
-
-    /* Warm if the buffer is full, the third parameter read goes to 0,
-     * so read return 0 as a disconnection */
-    TRACE(L_DEBUG, "server [%d]: read version ...", c->id);
-    k = read (c->soc,
-              c->req+c->req_pos,
-              sizeof(c->req)-c->req_pos-1);
-	if (k < 0) { perror ("read version"); disconnection (c); return; }
-	if (k == 0) { 
-		ERROR(L_VERBOSE, "server: maybe buffer is full"); 
-		disconnection (c);
-		return; 
-	}
-	TRACE(L_DEBUG, "server [%d]: read %d bytes", c->id, k);
-    
-    c->req_pos += k;
-
-    /* Maybe dangerous if lot of methods */
-    if ( (unsigned int)c->req_pos >= 3 ){
-		TRACE(L_DEBUG, "server [%d]: testing version ...", c->id);
-		
-		Socks5Version req;
-		Socks5VersionACK res;
-
-		/* Version packet:
-		 *	+----+----------+----------+
-		 *	|VER | NMETHODS | METHODS  |
-		 *	+----+----------+----------+
-		 *	| 1  |    1     | 1 to 255 |
-		 *	+----+----------+----------+
-		 */
-		memcpy(&req, c->req, sizeof(Socks5Version));
-		TRACE(L_DEBUG, "server [%d]: v0x%x, nmethod 0x%02X", c->id, req.ver,
-				req.nmethods);
-
-		/* If too much method we truncate */
-		if (sizeof(req.methods) < (unsigned int)req.nmethods){
-			ERROR(L_VERBOSE, "server [%d]: truncate methods", c->id);
-			req.nmethods = sizeof(req.methods);
-		}
-		
-		/* Show only in debug mode */
-		if ( L_DEBUG <= verbosity ){
-			printf("server [%d]: ", c->id);
-		}
-
-		/* Copy in methods the methods in the packet
-		 * memcpy can do the trick too */
-		for (i=0; i <  req.nmethods; ++i){
-			req.methods[i] = *(c->req + 2 + i );
-			/* Show only in debug mode */
-			if ( L_DEBUG <= verbosity ){
-				printf("0x%02X,",req.methods[i]);
-			}
-		}
-
-		/* Show only in debug mode */
-		if ( L_DEBUG <= verbosity ){
-			printf("\n");
-		}
-		
-		/* Testing version */
-		if(req.ver == SOCKS5_V){
-#ifdef HAVE_LIBSSL
-		}else if (globalArgsServer.ssl == 1 && req.ver == SOCKS5_SSL_V){
-#endif
-		}else{
-			ERROR(L_NOTICE, "server [%d]: wrong socks5 version", c->id);
-			disconnection (c);
-			return;
-		}
-
-		c->ver = req.ver;
-		
-		/* Searching valid methods:
-		 * Methods 0x00, no authentication
-		 *         0x01, GSSAPI no supported
-		 *         0x02, username/password RFC1929
-		 *
-		 * if method == no authentication
-		 * 		if guest available
-		 * 			set it
-		 * 			stop searching
-		 * if method == username password
-		 * 		set it
-		 * 		stop searching
-		 * */
-		for (i=0; i <  req.nmethods; ++i){
-			if ( req.methods[i] == 0x00){
-				/* In ssocks ( DYNAMIC_MODE no globalArgsServer */
-				if ( c->mode == M_DYNAMIC || globalArgsServer.guest != 0 ){
-					ok = 1;
-					c->auth = req.methods[i];
-					break;
-				}
-			}
-			if ( req.methods[i] == 0x02 ){
-				ok = 1;
-				c->auth = req.methods[i];
-				break;
-			}
-		}
-		
-		/* No valid method find */
-		if ( !ok ){
-			ERROR(L_NOTICE, "server [%d]: no method supported", c->id);
-			disconnection (c);
-			return;
-		}
-
-
-		/*
-		 * Version ack packet:
-		 *	+----+--------+
-		 *	|VER | METHOD |
-		 *	+----+--------+
-		 *	| 1  |   1    |
-		 *	+----+--------+
-		 *
-		 *  Build ack */
-		res.ver = c->ver;
-		res.method = c->auth;
-		
-		/* Copy in buffer for send */
-		memcpy(c->req, &res, sizeof(Socks5VersionACK));
-		
-		/* Reset counter and fix b flag */
-		c->req_pos = 0;
-		c->req_a = 0;
-		c->req_b = sizeof(Socks5VersionACK);
-
-		/* Next state write version ack */
-		c->state = E_W_VER_ACK;
-	}
-    return;
-}
-
-/* Write the version ack build by read_version
- */
-void write_version_ack (Client *c){
-	int k = 0;
+void build_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
+{
+	Socks5VersionACK res;
+	init_buffer(buf);
+	res.ver = s->version;
+	res.method = s->method;
 	
-	TRACE(L_DEBUG, "server [%d]: write version ack ...", c->id);
-    if (c->req_b-c->req_a > 0) {
-        k = write (c->soc, c->req+c->req_a, c->req_b-c->req_a);
-        if (k < 0) { perror ("write socket"); disconnection (c); return; }
-        TRACE(L_DEBUG, "server [%d]: wrote %d bytes", c->id, k);
-        c->req_a += k;
-    }
-
-    if (c->req_b-c->req_a <= 0) {
-
-#ifdef HAVE_LIBSSL
-		/* Init SSL here
-		 */
-		if ( c->ver == SOCKS5_SSL_V){
-			//set_blocking(c->soc);
-			TRACE(L_DEBUG, "server [%d]: socks5 ssl enable ...", c->id);
-			c->ssl = ssl_neogiciate_server(c->soc);
-			if ( c->ssl == NULL ){
-				ERROR(L_VERBOSE, "server [%d]: ssl error", c->id);
-				disconnection (c);
-				return;
-			}
-		}
-#endif
-
-		if ( c->auth == 0x02 ) /* Username/Password authentication */
-			/* Next state read authentication */
-			c->state = E_R_AUTH;
-		else{
-			/* Next state read request */
-			c->state = E_R_REQ;
-			append_log_client(c, "anonymous");
-		}
-    }
+	/* Copy in buffer for send */
+	memcpy(buf->data, &res, sizeof(Socks5VersionACK));
+	
+	/* Reset counter and fix b flag */
+	buf->a = 0;
+	buf->b = sizeof(Socks5VersionACK);
 }
 
-/* Read authentication packet and check username/password
- * and build the ack in buffer req
- *
- * RFC 1929
- *
- * Authentication packet:
- *	+----+------+----------+------+----------+
- *	|VER | ULEN |  UNAME   | PLEN |  PASSWD  |
- *	+----+------+----------+------+----------+
- *	| 1  |  1   | 1 to 255 |  1   | 1 to 255 |
- *	+----+------+----------+------+----------+
- *
- * Authentication ack packet:
- *	+----+--------+
+
+int analyse_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
+{
+	Socks5Auth req;
+	
+	TRACE(L_DEBUG, "server [%d]: testing authentication ...", 
+		s->id);
+	
+	/* Rebuild the packet in Socks5Auth struct
+	 *  +----+------+----------+------+----------+
+	 *	|VER | ULEN |  UNAME   | PLEN |  PASSWD  |
+	 *	+----+------+----------+------+----------+
+	 *	| 1  |  1   | 1 to 255 |  1   | 1 to 255 |
+	 *	+----+------+----------+------+----------+
+	 */
+	memcpy(&req, buf->data, 2);
+	memcpy(&req.plen, buf->data + 2 + (int)req.ulen , 2);
+
+	/* Check username and password length truncate if too long
+	 * RFC tell us max length 255 */
+	if ( (unsigned int)req.ulen > sizeof(req.uname)-1){
+		ERROR(L_NOTICE, "server [%d]: username too long", 
+			s->id);
+		req.ulen = sizeof(req.uname)-1;
+	}
+	if ( (unsigned int)req.plen > sizeof(req.passwd)-1){
+		ERROR(L_NOTICE, "server [%d]: password  too long", 
+			s->id);
+		req.plen = sizeof(req.passwd)-1;
+	}
+
+	/* Extract username and fix NULL byte */
+	strncpy(req.uname, buf->data + 2, req.ulen);
+	*(req.uname + req.ulen) = '\0';
+
+	/* Extract passwd and fix NULL byte */
+	strncpy(req.passwd, buf->data + 2 + (int)req.ulen + 1, req.plen);
+	*(req.passwd + req.plen) = '\0';
+	
+	TRACE(L_VERBOSE, "server [%d]: authentication attempt "\
+						"v0x%02X (%d,%d) %s:%s", 
+		s->id, 
+		req.ver, req.ulen, req.plen, req.uname, req.passwd);
+	
+	/* Test version need 0x01 RFC */
+	if ( req.ver != 0x01 ){
+		ERROR(L_NOTICE, "server [%d]: wrong version need to be 0x01", 
+			s->id);
+		return -1;
+	}
+	
+	/* Check username and password in authentication file */
+	if ( check_auth(req.uname, req.passwd) == 1 ){
+		TRACE(L_VERBOSE, "server [%d]: authentication OK!", 
+			s->id);
+		//append_log_client(c, "%s OK", req.uname);
+		s->auth = 1;
+	}else{
+		ERROR(L_VERBOSE, "server [%d]: authentication NOK!", 
+			s->id);
+		//append_log_client(c, "%s NOK", req.uname);
+		s->auth = 0;
+	}
+	
+	return 0;	
+}
+
+/*
+ *  +----+--------+
  *	|VER | STATUS |
  *	+----+--------+
  *	| 1  |   1    |
  *	+----+--------+
  */
-void read_auth (Client *c){
-    int k = 0, ok = 0;
-
-    TRACE(L_DEBUG, "server [%d]: read authentication uname/passwd ...", c->id);
-	if ( c->ver == SOCKS5_SSL_V){
-#ifdef HAVE_LIBSSL
-	    k = SSL_read (c->ssl,
-	              c->req+c->req_pos,
-	              sizeof(c->req)-c->req_pos-1);
-#endif
-	}else{
-	    k = read (c->soc,
-	              c->req+c->req_pos,
-	              sizeof(c->req)-c->req_pos-1);
-	}
-	if (k < 0) { perror ("read socket"); disconnection (c); return; }
-	if (k == 0) { 
-		ERROR(L_VERBOSE, "server: maybe buffer is full"); 
-		disconnection (c);
-		return; 
-	}
-	TRACE(L_DEBUG, "server [%d]: read %d bytes", c->id, k);
-    
-
-    c->req_pos += k;
-    if ( (unsigned int)c->req_pos >= 4 ){
-		TRACE(L_DEBUG, "server [%d]: testing authentication ...", c->id);
-		
-		Socks5Auth req;
-		Socks5AuthACK res;
-
-		/* Rebuild the packet in Socks5Auth struct
-		 *  +----+------+----------+------+----------+
-		 *	|VER | ULEN |  UNAME   | PLEN |  PASSWD  |
-		 *	+----+------+----------+------+----------+
-		 *	| 1  |  1   | 1 to 255 |  1   | 1 to 255 |
-		 *	+----+------+----------+------+----------+
-		 */
-		memcpy(&req, c->req, 2);
-		memcpy(&req.plen, c->req + 2 + (int)req.ulen , 2);
-
-		/* Check username and password length truncate if too long
-		 * RFC tell us max length 255 */
-		if ( (unsigned int)req.ulen > sizeof(req.uname)-1){
-			ERROR(L_NOTICE, "server [%d]: username too long", c->id);
-			req.ulen = sizeof(req.uname)-1;
-		}
-		if ( (unsigned int)req.plen > sizeof(req.passwd)-1){
-			ERROR(L_NOTICE, "server [%d]: password  too long", c->id);
-			req.plen = sizeof(req.passwd)-1;
-		}
-
-		/* Extract username and fix NULL byte */
-		strncpy(req.uname, c->req + 2, req.ulen);
-		*(req.uname + req.ulen) = '\0';
-
-		/* Extract passwd and fix NULL byte */
-		strncpy(req.passwd, c->req + 2 + (int)req.ulen + 1, req.plen);
-		*(req.passwd + req.plen) = '\0';
-		
-		TRACE(L_VERBOSE, "server [%d]: authentication attempt v0x%02X (%d,%d) %s:%s", 
-			c->id, req.ver, req.ulen, req.plen, req.uname, req.passwd);
-		
-		/* Test version need 0x01 RFC */
-		if ( req.ver != 0x01 ){
-			ERROR(L_NOTICE, "server [%d]: wrong version need to be 0x01", c->id);
-			disconnection (c);
-			return;
-		}
-		
-		/* Check username and password in authentication file */
-		if ( check_auth(req.uname, req.passwd) == 1 ){
-			TRACE(L_VERBOSE, "server [%d]: authentication OK!", c->id);
-			append_log_client(c, "%s OK", req.uname);
-			ok = 1;
-		}else{
-			ERROR(L_VERBOSE, "server [%d]: authentication NOK!", c->id);
-			append_log_client(c, "%s NOK", req.uname);
-		}
-		
-		/* Build ack
-		 *  +----+--------+
-		 *	|VER | STATUS |
-		 *	+----+--------+
-		 *	| 1  |   1    |
-		 *	+----+--------+
-		 */
-		res.ver = 0x01;
-		res.status = (ok) ? 0x00 : 0xFF; /* 0x00 == win! */
-		
-		/* Copy in buffer for send */
-		memcpy(c->req, &res, sizeof(Socks5AuthACK));
-		
-		/* Reset counter and fix b flag */
-		c->req_pos = 0;
-		c->req_a = 0;
-		c->req_b = sizeof(Socks5AuthACK);
-
-		/* Next state write auth ack */
-		c->state = E_W_AUTH_ACK;
-	}
-    return;	
-}
-/* Write the authentication ack build by read_auth
- */
-void write_auth_ack (Client *c){
-	int k = 0;
+void build_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
+{
+	Socks5AuthACK res;
+	init_buffer(buf);
+	res.ver = 0x01;
+	res.status = (s->auth) ? 0x00 : 0xFF; /* 0x00 == win! */
 	
-	TRACE(L_DEBUG, "server [%d]: write version ack ...", c->id);
-    if (c->req_b-c->req_a > 0) {
-		if ( c->ver == SOCKS5_SSL_V){
-#ifdef HAVE_LIBSSL
-			k = SSL_write(c->ssl, c->req+c->req_a, c->req_b-c->req_a);
-#endif
-		}else{
-			k = write (c->soc_stream, c->req+c->req_a, c->req_b-c->req_a);
-		}
-        if (k < 0) { perror ("write socket"); disconnection (c); return; }
-        TRACE(L_DEBUG, "server [%d]: wrote %d bytes", c->id, k);
-        c->req_a += k;
-    }
+	/* Copy in buffer for send */
+	memcpy(buf->data, &res, sizeof(Socks5VersionACK));
+	
+	/* Reset counter and fix b flag */
+	buf->a = 0;
+	buf->b = sizeof(Socks5VersionACK);
+}
 
-    if (c->req_b-c->req_a <= 0){
-    	c->buf_client_w = 0;
-    	/* Next state read request */
-		c->state = E_R_REQ;
+int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
+		s_socks_conf *c, s_buffer *buf)
+{
+	Socks5Req req;
+	TRACE(L_DEBUG, "server [%d]: testing client request ...", 
+		s->id);
+
+	int port = 0, *p;
+	char domain[256];
+	unsigned char chAddr[4];
+	unsigned int l;
+
+	/* Rebuild the packet but don't extract
+	 * DST.ADDR and DST.PORT in Socks5Req struct
+	 *	+----+-----+-------+------+----------+----------+
+	 *	|VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
+	 *	+----+-----+-------+------+----------+----------+
+	 *	| 1  |  1  | X'00' |  1   | Variable |    2     |
+	 *	+----+-----+-------+------+----------+----------+
+	 *
+	 */
+	memcpy(&req, buf->data, sizeof(Socks5Req));
+	TRACE(L_DEBUG, "server [%d]: v0x%x, cmd 0x%x, rsv 0x%x, atyp 0x%x", 
+		s->id, req.ver,
+		req.cmd, req.rsv, req.atyp);
+	
+	/* Save the request cmd */
+	s->cmd = req.cmd;
+	
+	/* Check ATYP
+	 * ATYP address type of following address
+	 *    -  IP V4 address: X'01'
+	 *    -  DOMAINNAME: X'03'
+	 *    -  IP V6 address: X'04'
+	 *
+	 */
+	switch ( req.atyp ){
+		case 0x03: /* Domain name */
+			/* First byte is the domain len */
+			l = *(buf->data + sizeof(Socks5Req)) ;
+
+			/* Copy the domain name and blank at end
+			 * little cheat to avoid overflow (dangerous here) */
+			strncpy(domain, buf->data + sizeof(Socks5Req) + 1,
+					( l < sizeof(domain) ) ? l : sizeof(domain)-1 );
+			domain[(int)l] = 0;
+			
+			/* After domain we have the port
+			 * big endian on 2 bytes*/
+			p = (int*)(buf->data + sizeof(Socks5Req) + l  + 1) ;
+			port = ntohs(*p);
+			
+			TRACE(L_DEBUG, "Server [%d]: asking for %s:%d", s->id, domain, port);
+			break;
+
+		case 0x01: /* IP address */
+			memcpy(&chAddr, (buf->data + sizeof(Socks5Req)), 
+					sizeof(chAddr));
+			sprintf(domain, "%d.%d.%d.%d", chAddr[0],
+				chAddr[1], chAddr[2], chAddr[3]);
+				
+			/* After domain we have the port
+			 * big endian on 2 bytes*/
+			p = (int*)(buf->data + sizeof(Socks5Req) + 4  ) ;
+			port = ntohs(*p);
+			break;
+
+		/* TODO: ipv6 support */
+		default:
+			ERROR(L_NOTICE, "server [%d]: support domain name "\
+								"and ipv4 only", 
+				s->id);
+			return -1;
 	}
+	
+	//append_log_client(c, "v%d %s:%d", s->version, domain, port);
+	
+	/* CMD:
+	 *  - CONNECT X'01'
+	 *  - BIND X'02'
+	 *  - UDP ASSOCIATE X'03'
+	 *
+	 * Open or bind connection here
+	 */
+	switch(req.cmd){
+		case 0x01: /* TCP/IP Stream connection */
+			stream->soc = new_client_socket(domain, port, &stream->adrC, 
+				&stream->adrS);
+			if ( stream->soc >= 0 ){
+				//append_log_client(c, "CONNECT");
+				s->connected = 1;
+				/* In the reply to a CONNECT, BND.PORT contains 
+				 * the port number that the server assigned to
+				 * connect to the target host, while BND.ADDR
+				 * contains the associated IP address.
+				 */
+				TRACE(L_DEBUG, "client: assigned addr %s", 
+					bor_adrtoa_in(&stream->adrC));
+			}
+			break;
+		case 0x02: /* TCP/IP port binding */
+			bind->soc = new_listen_socket(port, 10, &bind->adrC);
+			if ( bind->soc >= 0 ){
+				//append_log_client(c, "BIND");
+				s->connected = 0;
+				s->listen = 1;
+				/* TODO: Need to set bndaddr and bndport 
+				 * in port binding see RFC:
+				 * The BND.PORT field contains the port number that the
+				 * SOCKS server assigned to listen for an incoming 
+				 * connection. The BND.ADDR field contains 
+				 * the associated IP address.
+				 */
+			}
+
+			break;
+		/* TODO: udp support */
+		default :
+			//append_log_client(c, "ERROR request cmd");
+			ERROR(L_NOTICE, "server [%d]: don't support udp", 
+				s->id);
+			return -2;
+	}
+	
+	return 0;
 }
 
-void *thr_process_request( void *client ){
-		Client *c = (Client *)client;
-
-
-		TRACE(L_DEBUG, "server [%d]: testing client request ...", c->id);
-
-		int ok = 0;
-		char domain[256];
-		int port = 0;
-
-		unsigned char chAddr[4];
-		unsigned int l;
-		int *p;
-
-		Socks5Req req;
-		Socks5ReqACK res;
-
-		/* Rebuild the packet but don't extract
-		 * DST.ADDR and DST.PORT in Socks5Req struct
-		 *	+----+-----+-------+------+----------+----------+
-		 *	|VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
-		 *	+----+-----+-------+------+----------+----------+
-		 *	| 1  |  1  | X'00' |  1   | Variable |    2     |
-		 *	+----+-----+-------+------+----------+----------+
-		 *
-		 */
-		memcpy(&req, c->req, sizeof(Socks5Req));
-		TRACE(L_DEBUG, "server [%d]: v0x%x, cmd 0x%x, rsv 0x%x, atyp 0x%x", c->id, req.ver,
-			req.cmd, req.rsv, req.atyp);
-		
-		/* Check ATYP
-		 * ATYP address type of following address
-         *    -  IP V4 address: X'01'
-         *    -  DOMAINNAME: X'03'
-         *    -  IP V6 address: X'04'
-		 *
-		 */
-		switch ( req.atyp ){
-			case 0x03: /* Domain name */
-				/* First byte is the domain len */
-				l = *(c->req + sizeof(Socks5Req)) ;
-
-				/* Copy the domain name and blank at end
-				 * little cheat to avoid overflow (dangerous here) */
-				strncpy(domain, c->req + sizeof(Socks5Req) + 1,
-						( l < sizeof(domain) ) ? l : sizeof(domain)-1 );
-				domain[(int)l] = 0;
-				
-				/* After domain we have the port
-				 * big endian on 2 bytes*/
-				p = (int*)(c->req + sizeof(Socks5Req) + l  + 1) ;
-				port = ntohs(*p);
-				
-				/*printf("Server [%d]: asking for %s:%d\n", c->id, domain, port);*/
-				break;
-
-			case 0x01: /* IP address */
-				memcpy(&chAddr, (c->req + sizeof(Socks5Req)), sizeof(chAddr));
-				sprintf(domain, "%d.%d.%d.%d", chAddr[0],
-					chAddr[1], chAddr[2], chAddr[3]);
-					
-				/* After domain we have the port
-				 * big endian on 2 bytes*/
-				p = (int*)(c->req + sizeof(Socks5Req) + 4  ) ;
-				port = ntohs(*p);
-				break;
-
-			/* TODO: ipv6 support */
-			default:
-				ERROR(L_NOTICE, "server [%d]: support domain name and ipv4 only", c->id);
-				disconnection (c);
-
-#ifdef HAVE_LIBPTHREAD
-				pthread_exit(NULL);
-#else
-				return NULL;
-#endif
-
-		}
-
-		append_log_client(c, "v%d %s:%d", c->ver, domain, port);
-
-		/* Request ack packet:
-		 *	+----+-----+-------+------+----------+----------+
-		 *	|VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |
-		 *	+----+-----+-------+------+----------+----------+
-		 *	| 1  |  1  | X'00' |  1   | Variable |    2     |
-		 *	+----+-----+-------+------+----------+----------+
-		 *  Build ack */
-		res.ver = SOCKS5_V;/*c->ver*/;
-		res.rsv = 0;
-		res.atyp = 0x01;
-
-		/* CMD:
-         *  - CONNECT X'01'
-         *  - BIND X'02'
-         *  - UDP ASSOCIATE X'03'
-		 *
-		 * Open or bind connection here
-		 */
-		switch(req.cmd){
-			case 0x01: /* TCP/IP Stream connection */
-
-				c->soc_stream = new_client_socket(domain, port, &c->addr_stream, &c->addr_dest);
-				if ( c->soc_stream >= 0 ){
-					append_log_client(c, "CONNECT");
-					ok = 1;
-					/* In the reply to a CONNECT, BND.PORT contains the port number that the
-					 * server assigned to connect to the target host, while BND.ADDR
-					 * contains the associated IP address.
-					 */
-					TRACE(L_DEBUG, "client: assigned addr %s", bor_adrtoa_in(&c->addr_stream));
-					memcpy(&res.bndaddr, &c->addr_stream.sin_addr.s_addr,
-							sizeof(c->addr_stream.sin_addr.s_addr));
-					memcpy(&res.bndport, &c->addr_stream.sin_port,
-							sizeof(c->addr_stream.sin_port));
-
-					/*DUMP(&c->adr_stream.sin_addr.s_addr, sizeof(c->adr_stream.sin_addr.s_addr));
-					DUMP(&c->adr_stream.sin_port, sizeof(c->adr_bind.sin_port));
-					DUMP(&c->adr_bind.sin_addr.s_addr, sizeof(c->adr_bind.sin_addr.s_addr));
-					DUMP(&c->adr_bind.sin_port, sizeof(c->adr_bind.sin_port));*/
-				}
-				break;
-			case 0x02: /* TCP/IP port binding */
-				c->soc_bind = new_listen_socket(port, 10);
-				if ( c->soc_bind >= 0 ){
-					append_log_client(c, "BIND");
-					ok = 1;
-					/* TODO: Need to set bndaddr and bndport in port binding see RFC
-					 * The BND.PORT field contains the port number that the
-				     * SOCKS server assigned to listen for an incoming connection.  The
-				     * BND.ADDR field contains the associated IP address.
-				     */
-
-
-				}
-
-				break;
-			/* TODO: udp support */
-			default :
-				append_log_client(c, "ERROR request cmd");
-				ERROR(L_NOTICE, "server [%d]: don't support udp", c->id);
-				disconnection (c);
-#ifdef HAVE_LIBPTHREAD
-				pthread_exit(NULL);
-#else
-				return NULL;
-#endif
-		}
-
-		/* 0x00 succeeded, 0x01 general SOCKS failure ... */
-		res.rep = (ok == 1) ? 0x00 : 0x01;
-		
-		/* Copy in buffer for send */
-		memcpy(c->req, &res, sizeof(Socks5ReqACK));
-
-		/* Reset counter and fix b flag */
-		c->req_pos = 0;
-		c->req_a = 0;
-		c->req_b = sizeof(Socks5ReqACK);
-
-		/* Next state write request ack */
-		c->state = E_W_REQ_ACK;
-
-		/* TODO: need to find a better way to exit select
-		 * Send signal SIGUSER1 to the parent thread to unblock select */
-		if ( kill(getpid(), SIGUSR1) != 0 )
-			perror("kill");
-
-#ifdef HAVE_LIBPTHREAD
-				pthread_exit(NULL);
-#else
-				return NULL;
-#endif
+int analyse_request_dynamic(s_socks *s, s_socks_conf *c, s_buffer *buf)
+{
+	return -1;
 }
 
-/* Read request packet and test it, create connection
- * and build the ack in buffer req
- *
- * Request packet:
- *	+----+-----+-------+------+----------+----------+
- *	|VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
- *	+----+-----+-------+------+----------+----------+
- *	| 1  |  1  | X'00' |  1   | Variable |    2     |
- *	+----+-----+-------+------+----------+----------+
- *
- * Request ack packet:
+/* Request ack packet:
  *	+----+-----+-------+------+----------+----------+
  *	|VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |
  *	+----+-----+-------+------+----------+----------+
  *	| 1  |  1  | X'00' |  1   | Variable |    2     |
  *	+----+-----+-------+------+----------+----------+
- *
- * See RFC 1928 / 4.  Requests for full information
  */
-void read_request (Client *c){
-	int k = 0;
-
-    TRACE(L_DEBUG, "server [%d]: read client request ...", c->id);
-	if ( c->ver == SOCKS5_SSL_V){
-#ifdef HAVE_LIBSSL
-	    k = SSL_read (c->ssl,
-	              c->req+c->req_pos,
-	              sizeof(c->req)-c->req_pos-1);
-#endif
-	}else{
-	    k = read (c->soc,
-	              c->req+c->req_pos,
-	              sizeof(c->req)-c->req_pos-1);
-	}
-	if (k < 0) { perror ("read socket"); disconnection (c); return; }
-	if (k == 0) {
-		ERROR(L_VERBOSE,  "server: maybe buffer is full");
-		disconnection (c);
-		return;
-	}
-	TRACE(L_DEBUG, "server [%d]: read %d bytes", c->id, k);
-
-    c->req_pos += k;
-    if ( c->req_pos >= (int)(sizeof(Socks5Req)  + 4) ){
-
-#ifdef HAVE_LIBPTHREAD
-    	/* This avoid to block all socks client when we do a connection */
-    	pthread_t thr;
-    	pthread_create( &thr, NULL, thr_process_request, (void*) c);
-
-    	/* We never join this thread, to notify the end
-    	 * it send a signal SIGUSR1 */
-    	pthread_detach(thr);
-
-    	/* Next state wait end of thr_process_request */
-		c->state = E_WAIT;
-#else
-		thr_process_request((void*) c);
-#endif
-
-	}
-}
-
-/* Used by ssocks not in the server
- */
-void read_request_dynamic (Client *c){
-	int k = 0;
-
-	TRACE(L_DEBUG, "server [%d]: read dynamic client request ...", c->id);
-	k = read (c->soc, 
-			  c->buf_stream+c->buf_stream_b, 
-			  sizeof(c->buf_stream)-c->buf_stream_b-1);
-	if (k < 0) { perror ("read socket"); disconnection (c); return; }
-	if (k == 0) { 
-		ERROR(L_VERBOSE, "server [%d]: maybe buffer is full", c->id);
-		disconnection (c);
-		return; 
-	}
-	TRACE(L_DEBUG, "server [%d]: read %d bytes", c->id, k);
-   
-    c->buf_stream_b += k;
-    if ( c->buf_stream_b-c->buf_stream_a >= (int)(sizeof(Socks5Req)  + 4) ){
-		TRACE(L_DEBUG, "server [%d]: testing dynamic client request ...", c->id);
-
-		if ( c->config == NULL ){
-			ERROR(L_NOTICE, "server [%d]: no config", c->id);
-			disconnection (c); return;
-		}
-
-		TRACE(L_DEBUG, "server [%d]: try to connect on %s:%d ...",c->id,
-			((ConfigDynamic*)c->config)->host, 
-			((ConfigDynamic*)c->config)->port);
-		
-		c->soc_stream = new_client_socket(((ConfigDynamic*)c->config)->host, 
-			((ConfigDynamic*)c->config)->port, &c->addr_stream, &c->addr_dest);
-		if ( c->soc_stream < 0 ){
-			disconnection (c); return;
-		}
-		
-		c->req_a = 0;
-		c->req_b = 0;
-
-		c->state = E_WAIT;
-		//c->stateC = E_W_VER_ACK;
-	}
-    return;
-}
-
-/* Write the request ack build by read_request
- */
-void write_request_ack (Client *c){
-	int k = 0;
+void build_request_ack(s_socks *s, s_socks_conf *c, 
+		s_socket *stream, s_socket *bind, s_buffer *buf)
+{
 	
-	TRACE(L_DEBUG, "server [%d]: send request ack ...", c->id);
-    if (c->req_b-c->req_a > 0) {
-		if ( c->ver == SOCKS5_SSL_V){
-#ifdef HAVE_LIBSSL
-			k = SSL_write(c->ssl, c->req+c->req_a, c->req_b-c->req_a);
-#endif
-		}else{
-			k = write (c->soc, c->req+c->req_a, c->req_b-c->req_a);
-		}
-        if (k < 0) { perror ("write socket"); disconnection (c); return; }
-        TRACE(L_DEBUG, "server [%d]: send %d bytes", c->id, k);
-        c->req_a += k;
-    }
-
-    if (c->req_b-c->req_a <= 0){
-    	/* Next state recv  */
-		c->state = E_REPLY;
-		c->buf_client_w = 0; // ??
-	}
-}
-
-
-
-/* Accept new connection and send request on soc_stream of the client
- * Build the second request
- * See RFC
- */
-void build_request_bind(Client *c){
-	TRACE(L_VERBOSE, "server [%d]: build binding packet ...", c->id);
-	struct sockaddr_in adrC_tmp;
-
 	Socks5ReqACK res;
-	int ok = 1;
-	
-	c->soc_stream  = bor_accept_in (c->soc_bind, &adrC_tmp);
-	if (c->soc_stream < 0) { disconnection (c); return; }
-	TRACE(L_DEBUG, "server: established connection with %s", 
-	bor_adrtoa_in(&adrC_tmp));
 
-	append_log_client(c, "ACCEPT %s", bor_adrtoa_in(&adrC_tmp));
-	
-	/* Build second request of bind see RFC */
-	res.ver = c->ver;
-	/* 0x00 succeeded, 0x01 general SOCKS failure ... */
-	res.rep = (ok == 1) ? 0x00 : 0x01; 
-
+	res.ver = s->version;
 	res.rsv = 0;
 	res.atyp = 0x01;
-	/* TODO: set bndaddr and bndport see RFC */
-	/* res.bndaddr = 0;
-	res.bndport = 0; */
+	
+	init_buffer(buf);
+	
+	switch(s->cmd){
+		case 0x01:
+			/* 0x00 succeeded, 0x01 general SOCKS failure ... */
+			if ( s->connected == 1){
+				res.rep = 0x00;
+				memcpy(&res.bndaddr, &stream->adrC.sin_addr.s_addr,
+						sizeof(stream->adrC.sin_addr.s_addr));
+				memcpy(&res.bndport, &stream->adrC.sin_port,
+						sizeof(stream->adrC.sin_port));	
+			}else{
+				res.rep = 0x01;
+			}
+			break;
+			
+		case 0x02:
+			/* 0x00 succeeded, 0x01 general SOCKS failure ... */
+			if ( s->listen == 1 && s->connected == 0 ){
+				res.rep = 0x00;
+				memcpy(&res.bndaddr, &bind->adrC.sin_addr.s_addr,
+						sizeof(bind->adrC.sin_addr.s_addr));
+				memcpy(&res.bndport, &bind->adrC.sin_port,
+						sizeof(bind->adrC.sin_port));
+			}else if ( s->listen == 1 && s->connected == 1 ){
+				res.rep = 0x00;
+				memcpy(&res.bndaddr, &stream->adrC.sin_addr.s_addr,
+						sizeof(stream->adrC.sin_addr.s_addr));
+				memcpy(&res.bndport, &stream->adrC.sin_port,
+						sizeof(stream->adrC.sin_port));
+			}else{
+				res.rep = 0x01;
+			}
+			
 
+			break;
+			
+		default:
+			res.rep = 0x00;
+			break;
+	}
+	
 	/* Copy in buffer for send */
-	memcpy(c->req, &res, sizeof(Socks5ReqACK));
-	/* DUMP(c->req, sizeof(Socks5ReqACK)); */
-
+	memcpy(buf->data, &res, sizeof(Socks5ReqACK));
+	
 	/* Reset counter and fix b flag */
-	c->req_pos = 0;
-	c->req_a = 0;
-	c->req_b = sizeof(Socks5ReqACK);
+	buf->a = 0;
+	buf->b = sizeof(Socks5ReqACK);
+}
 
-	/* Next state write request ack */
-	c->state = E_W_REQ_ACK;
+int build_request_accept_bind(s_socks *s, s_socks_conf *c,
+		s_socket *stream, s_socket *bind, s_buffer *buf)
+{
+	init_buffer(buf);
+	
+	TRACE(L_VERBOSE, "server [%d]: build binding packet ...", 
+		s->id);
+
+	stream->soc  = bor_accept_in (bind->soc, &stream->adrC);
+	if ( stream->soc < 0 ){
+		s->connected = -1; /* Send a error request ack */
+		return -1;
+	}
+	
+	s->connected = 1;
+	
+	TRACE(L_DEBUG, "server: established connection with %s", 
+		bor_adrtoa_in(&stream->adrC));
+		
+	//append_log_client(c, "ACCEPT %s", bor_adrtoa_in(&stream->adrC));
+	
+	build_request_ack(s, c, stream, bind, buf);
+	
+	return 0;
+}
+
+void dispatch_server_write(s_socket *soc, s_socks *socks,
+		s_buffer *buf, s_socks_conf *conf)
+{
+	int k;
+	switch(socks->state){
+		case S_W_VER_ACK:
+			WRITE_DISP(k, soc, buf);
+
+			if ( socks->method == 0x02 )
+				socks->state = S_R_AUTH;
+			else
+				socks->state = S_R_REQ;
+
+			break;
+
+		case S_W_AUTH_ACK:
+			WRITE_DISP(k, soc, buf);
+			if ( socks->auth == 0 ){
+				close_socket(soc);
+				break;
+			}
+
+
+			socks->state = S_R_REQ;
+			break;
+
+		case S_W_REQ_ACK:
+			WRITE_DISP(k, soc, buf);
+			if ( socks->listen == 1 ){
+				socks->state = S_WAIT;
+			}else if ( socks->connected == 0 ){
+				close_socket(soc);
+			}else{
+				socks->state = S_REPLY;
+			}
+			break;
+
+		case S_REPLY:
+				k = write_socks(soc, buf);
+				if (k < 0){ close_socket(soc); break; } /* Error */
+				init_buffer(buf);
+			break;
+
+		default:
+			break;
+	}
+}
+
+void dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind,
+		s_socks *socks, s_buffer *buf, s_buffer *buf_stream, s_socks_conf *conf){
+	int k;
+	struct sockaddr_in adrC, adrS;
+
+	switch(socks->state){
+		case S_R_VER:
+			READ_DISP(k, soc, buf, 3);
+
+			k = analyse_version(socks, conf,
+								buf);
+			if (k < 0){ close_socket(soc); break; } /* Error */
+
+			build_version_ack(socks, conf,
+								buf);
+
+			socks->state = S_W_VER_ACK;
+
+			break;
+
+		case S_R_AUTH:
+			READ_DISP(k, soc, buf, 4);
+
+			k = analyse_auth(socks, conf,
+								buf);
+			if (k < 0){ close_socket(soc); break; } /* Error */
+
+			build_auth_ack(socks, conf,
+								buf);
+
+			socks->state = S_W_AUTH_ACK;
+
+			break;
+
+		case S_R_REQ:
+			if ( socks->mode == M_DYNAMIC){
+				READ_DISP(k, soc, buf,
+					sizeof(Socks5Req)  + 4);
+				soc_stream->soc = new_client_socket(conf->config.cli->sockshost,
+									conf->config.cli->socksport,
+									&adrC, &adrS);
+
+				if ( soc_stream->soc < 0 ){
+					ERROR(L_NOTICE, "client: connection to socks5 server impossible!");
+					close_socket(soc);
+				}
+
+				socks->state = S_WAIT;
+				break;
+			}
+
+			READ_DISP(k, soc, buf,
+				sizeof(Socks5Req)  + 4);
+			k = analyse_request(socks,
+								soc_stream, soc_bind,
+								 conf, buf);
+
+			if (k < 0){ close_socket(soc); break; } /* Error */
+
+			build_request_ack(socks, conf,
+								soc_stream, soc_bind,
+								buf);
+
+			socks->state = S_W_REQ_ACK;
+
+			break;
+
+		case S_REPLY:
+			if ( buf_free(buf_stream) > 0 ){
+				k = read_socks(soc, buf_stream, 0);
+				if (k < 0){ close_socket(soc); break; } /* Error */
+			}
+			break;
+		default:
+			break;
+	}
+
+}
+
+
+void dispatch_server(s_client *client, fd_set *set_read, fd_set *set_write)
+{
+	int k;
+	
+	/* Dispatch server socket */
+	if (client->soc.soc != -1 && FD_ISSET (client->soc.soc, set_read))
+		dispatch_server_read(&client->soc, &client->soc_stream, &client->soc_bind,
+				&client->socks, &client->buf, &client->stream_buf, client->conf);
+
+	else if (client->soc.soc != -1 && 
+			FD_ISSET (client->soc.soc, set_write))
+		dispatch_server_write(&client->soc, &client->socks, &client->buf, client->conf);
+	
+	/* Dispatch stream socket */
+	if (client->soc_stream.soc != -1 
+			&& FD_ISSET (client->soc_stream.soc, set_read)){
+		if ( buf_free(&client->buf) > 0 ){
+			k = read_socks(&client->soc_stream, &client->buf, 0); 
+			if (k < 0){ disconnection(client); } /* Error */
+		}
+
+	}else if (client->soc_stream.soc != -1 
+			&& FD_ISSET (client->soc_stream.soc, set_write)){
+		
+			k = write_socks(&client->soc_stream, &client->stream_buf);
+			if (k < 0){ disconnection(client); } /* Error */ 
+			init_buffer(&client->stream_buf);
+	}
+		
+	if (client->soc_bind.soc != -1 &&
+			FD_ISSET (client->soc_bind.soc, set_read)){
+		if ( build_request_accept_bind(&client->socks, client->conf, 
+				&client->soc_stream, &client->soc_bind, &client->buf) == 0 ){
+			client->socks.state = S_W_REQ_ACK;
+		}
+	}
+}
+
+void init_select_server_cli (s_socket *soc,	s_socks *s, s_buffer *buf,
+		int *maxfd,	fd_set *set_read, fd_set *set_write){
+	if ( soc->soc != -1 ){
+		if ( s->state == S_R_VER ||
+			 s->state == S_R_AUTH ||
+			 s->state == S_R_REQ )
+		{
+			FD_SET(soc->soc, set_read);
+		}else if (s->state == S_W_VER_ACK ||
+				  s->state == S_W_AUTH_ACK ||
+			      s->state == S_W_REQ_ACK)
+		{
+			FD_SET(soc->soc, set_write);
+		}else if (s->state == S_WAIT ){
+
+		}else if (s->state == S_REPLY )	{
+			if ( buf_empty(buf) == 0 ){
+				FD_SET(soc->soc, set_write);
+			}else{
+				FD_SET(soc->soc, set_read);
+			}
+		}
+		if (soc->soc > *maxfd) *maxfd = soc->soc;
+	}
+}
+
+void init_select_server_stream (s_socket *soc, s_buffer *buf,
+		int *maxfd,	fd_set *set_read, fd_set *set_write){
+	if ( soc->soc != -1 ){
+		if ( buf_empty(buf) == 0 ){
+			FD_SET(soc->soc, set_write);
+		}else{
+			FD_SET(soc->soc, set_read);
+		}
+		if (soc->soc > *maxfd) *maxfd = soc->soc;
+	}
+}
+
+/* TODO: init_select_server
+ */
+void init_select_server (int soc_ec, s_client *tc, int *maxfd,
+		fd_set *set_read, fd_set *set_write)
+{
+    int nc;
+
+    FD_ZERO (set_read);
+    FD_ZERO (set_write);
+    FD_SET (soc_ec, set_read);
+
+    *maxfd = soc_ec;
+    for (nc = 0; nc < MAXCLI; nc++){
+		s_client *client = &tc[nc];
+		
+		init_select_server_cli(&client->soc, &client->socks, &client->buf,
+				maxfd, set_read, set_write);
+
+		init_select_server_stream(&client->soc_stream, &client->stream_buf,
+				maxfd, set_read, set_write);
+
+		
+		if ( client->soc_bind.soc != -1 ){
+			FD_SET(client->soc_bind.soc, set_read);
+			if (client->soc_bind.soc > *maxfd) *maxfd = client->soc_bind.soc;
+		}
+	}
 }

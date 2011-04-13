@@ -1,7 +1,7 @@
 /*
  *      socks5-server.h
  *      
- *      Created on: 2011-03-30
+ *      Created on: 2011-04-11
  *      Author:     Hugo Caron
  *      Email:      <h.caron@codsec.com>
  * 
@@ -28,22 +28,46 @@
 #ifndef SOCKS5_SERVER__H
 #define SOCKS5_SERVER__H
 
+#include "socks-common.h"
 #include "client.h"
 
+int build_request_accept_bind(s_socks *s, s_socks_conf *c,
+		s_socket *stream, s_socket *bind, s_buffer *buf);
+void build_request_ack(s_socks *s, s_socks_conf *c, 
+		s_socket *stream, s_socket *bind, s_buffer *buf);
+		
+int analyse_request_dynamic(s_socks *s, s_socks_conf *c, s_buffer *buf);
+int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
+		s_socks_conf *c, s_buffer *buf);
+		
+void build_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
+int analyse_auth(s_socks *s, s_socks_conf *c, s_buffer *buf);
 
-void dispatch_server (Client *c);
+void build_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
+int analyse_version(s_socks *s, s_socks_conf *c, s_buffer *buf);
 
-void read_version (Client *c);
-void write_version_ack (Client *c);
 
-void read_auth (Client *c);
-void write_auth_ack (Client *c);
+void dispatch_server(s_client *client, fd_set *set_read, fd_set *set_write);
 
-void read_request (Client *c);
-void read_request_dynamic (Client *c);
+void dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind,
+		s_socks *socks, s_buffer *buf, s_buffer *buf_stream, s_socks_conf *conf);
 
-void write_request_ack (Client *c);
+void dispatch_server_write(s_socket *soc, s_socks *socks,
+		s_buffer *buf, s_socks_conf *conf);
 
-void build_request_bind(Client *c);
+/* TODO: Implement this function:
+void dispatch_server(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind,
+		s_socks *socks, s_buffer *buf, s_buffer *buf_stream, s_socks_conf *conf,
+		fd_set *set_read, fd_set *set_write);
+*/
+
+void init_select_server_stream (s_socket *soc, s_buffer *buf,
+		int *maxfd,	fd_set *set_read, fd_set *set_write);
+void init_select_server_cli (s_socket *soc,	s_socks *s, s_buffer *buf,
+		int *maxfd,	fd_set *set_read, fd_set *set_write);
+
+void init_select_server (int soc_ec, s_client *tc, int *maxfd,
+		fd_set *set_read, fd_set *set_write);
 
 #endif /* SOCKS5_SERVER__H */
+

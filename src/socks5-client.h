@@ -1,7 +1,7 @@
 /*
- *      socks5_client.h
+ *      socks5-client.h
  *      
- *      Created on: 2011-03-31
+ *      Created on: 2011-04-11
  *      Author:     Hugo Caron
  *      Email:      <h.caron@codsec.com>
  * 
@@ -25,53 +25,35 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
-#ifndef SOCKS5_CLIENT__H
-#define SOCKS5_CLIENT__H
-
+#include "socks-common.h"
 #include "client.h"
 
-#ifdef HAVE_LIBSSL
-	#include "ssl-util.h"
-#endif
+void build_version(s_socks *s, s_socks_conf *c, s_buffer *buf);
+int analyse_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
+		
+int build_auth(s_socks *s, s_socks_conf *c, s_buffer *buf);
+int analyse_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
 
-typedef struct {
-	char *host;		/* Host destination */
-	int port;		/* Port destination */
-	
-	char *uname; 	/* Socks username */
-	char *passwd;	/* Socks password */
-	
-	int loop;	  	/* Stop the client loop */
-	int naskbind; 	/* Count number of ask send for bind */
-
-	int version;  	/* Version wanted */
-	int bind;     	/* BIND mode not connected */
-
-	int soc;		/* If connection OK is != -1 */
-#ifdef HAVE_LIBSSL
-	SSL *socSsl;	/* If connection OK is != NULL */
-#endif
-} ConfigClient;
-
-#ifdef HAVE_LIBSSL
-	extern SSL *sslCli;
-#endif
-
-void dispatch_client (Client *c);
-
-void write_version(Client *c);
-void read_version_ack(Client *c);
-
-void write_auth(Client *c);
-void read_auth_ack(Client *c);
-
-void write_request(Client *c);
-void read_request_ack(Client *c);
-
-int new_socket_with_socks(char *sockshost, int socksport,
-		ConfigClient *config);
+void build_request(s_socks *s, s_socks_conf *c, s_buffer *buf);
+int analyse_request_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
 
 
+void dispatch_client_write(s_socket *soc, s_socks *socks,
+		s_buffer *buf, s_socks_conf *conf);
+void dispatch_client_read(s_socket *soc, s_socket *soc_stream,
+		s_socks *socks, s_buffer *buf, s_buffer *buf_stream, s_socks_conf *conf);
+void dispatch_client(s_client *client, fd_set *set_read, fd_set *set_write);
 
-#endif /* SOCKS5_CLIENT__H */
+void dispatch_dynamic(s_client *client, fd_set *set_read, fd_set *set_write);
+
+void init_select_client (s_socket *soc, s_socks *s, s_buffer *buf, int *maxfd,
+		fd_set *set_read, fd_set *set_write);
+
+void init_select_dynamic (int soc_ec, s_client *tc, int *maxfd,
+		fd_set *set_read, fd_set *set_write);
+
+int new_socket_with_socks(s_socket *s,
+		char *sockshost, int socksport,
+		char *username, char *password,
+		char *host, int port,
+		int version);

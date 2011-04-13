@@ -77,6 +77,12 @@ void init_socks(s_socks *s, int id, int mode){
 		case M_SERVER:
 			s->state = S_R_VER;
 			break;
+		case M_DYNAMIC:
+			s->state = S_R_VER;
+			break;
+		case M_DYNAMIC_CLIENT:
+			s->state = S_W_VER;
+			break;
 		default:
 			s->state = -1;   	/* Socks state */
 			break;

@@ -3,7 +3,7 @@
 
 AC_PREREQ([2.65])
 AC_INIT([ssocks], [0.0.8-dev-ssl], [h.caron@codsec.com])
-AC_CONFIG_SRCDIR([src/bor-timer.c])
+AC_CONFIG_SRCDIR([src/auth-util.c])
 AC_CONFIG_HEADERS([config.h])
 
 # Checks for programs.

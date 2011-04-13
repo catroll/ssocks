@@ -3,7 +3,7 @@
  * 
  * 		Netcat like who pass through a socks5
  * 
- *      Created on: 2011-04-01
+ *      Created on: 2011-04-12
  *      Author:     Hugo Caron
  *      Email:      <h.caron@codsec.com>
  * 
@@ -30,10 +30,9 @@
 
 #include "bor-util.h"
 #include "net-util.h"
-#include "bor-timer.h"
 
 #include "output-util.h"
-#include "socks5-common.h"
+#include "socks-common.h"
 #include "socks5-client.h"
 
 #include <config.h>
@@ -47,7 +46,7 @@ void capte_fin (int sig){
     boucle_princ = 0;
 }
 
-void netcat_like(ConfigClient *config){
+void netcat_like(int soc){
 
 	/* Catch CTRL-C */
     bor_signal (SIGINT, capte_fin, SA_RESTART);
@@ -62,50 +61,39 @@ void netcat_like(ConfigClient *config){
 		FD_ZERO (&set_write);
 		
 		FD_SET (0, &set_read);
-		FD_SET (config->soc, &set_read);
-		if (config->soc > maxfd) maxfd = config->soc; /* Fix maxfd */
+		FD_SET (soc, &set_read);
+		if (soc > maxfd) maxfd = soc; /* Fix maxfd */
 		
 		if ( buf_b - buf_a > 0 ){
-			FD_SET (config->soc, &set_write);
+			FD_SET (soc, &set_write);
 		}
 		
-		res = select (maxfd+1, &set_read, &set_write, NULL, bor_timer_delay());
+		res = select (maxfd+1, &set_read, &set_write, NULL, NULL);
         if (res > 0) {  /* Search eligible sockets */
 			
 			/* Read on stdin ? */
 			if (FD_ISSET (0, &set_read)){
 				k = read(0, buf+buf_b, sizeof(buf)-buf_b-1);
-				if ( k < 0 ) { perror("read stdin"); close(config->soc); exit(1); }
-				if ( k == 0 ) { ERROR(L_DEBUG, "client: read 0 bytes on stdin\n"); boucle_princ = 0; }
+				if ( k < 0 ) { perror("read stdin"); close(soc); exit(1); }
+				if ( k == 0 ) { ERROR(L_DEBUG, "client: read 0 bytes on stdin"); boucle_princ = 0; }
 				//printf("client: read %d bytes in stdin\n", k);
 				buf_b += k;			
 			}
 			
 			/* Read on socket ? */
-			if (FD_ISSET (config->soc, &set_read)){
-				if ( config->version == SOCKS5_SSL_V ){
-#ifdef HAVE_LIBSSL
-					k = SSL_read(config->socSsl, buf+buf_b, sizeof(buf)-buf_b-1);
-#endif
-				}else{
-					k = read(config->soc, buf+buf_b, sizeof(buf)-buf_b-1);
-				}
-				if ( k < 0 ) { perror("read socket"); close(config->soc); exit(1); }
-				if ( k == 0 ) { ERROR(L_DEBUG, "client: read 0 bytes!\n"); boucle_princ = 0; }
+			if (FD_ISSET (soc, &set_read)){
+				k = read(soc, buf+buf_b, sizeof(buf)-buf_b-1);
+
+				if ( k < 0 ) { perror("read socket"); close(soc); exit(1); }
+				if ( k == 0 ) { ERROR(L_DEBUG, "client: read 0 bytes!"); boucle_princ = 0; }
 				//printf("client: read %d bytes in socket\n", k);	
 				k = write(1, buf, k);
 			}
 			
 			/* Write on socket ? */
-			if(FD_ISSET (config->soc, &set_write)){
-				if ( config->version == SOCKS5_SSL_V ){
-#ifdef HAVE_LIBSSL
-					k = SSL_write(config->socSsl, buf+buf_a, buf_b - buf_a);
-#endif
-				}else{
-					k = write(config->soc, buf+buf_a, buf_b - buf_a);
-				}
-
+			if(FD_ISSET (soc, &set_write)){
+				k = write(soc, buf+buf_a, buf_b - buf_a);
+					
 				if ( k < 0 ) { perror("write socket"); boucle_princ = 0; }
 				//printf("client: wrote %d bytes on socket\n", k);
 				buf_a += k;
@@ -125,65 +113,51 @@ void netcat_like(ConfigClient *config){
 	}	
 }
 
-void netcat_socks(char *hostsocks, int portsocks, 
+		
+void netcat_socks(char *sockshost, int socksport, 
 				char *host, int port, 
 				char *uname, char *passwd,
 				int ssl){
+	s_socket s;
 
-	ConfigClient config;
-	config.host = host;
-	config.port = port;
-	config.uname = uname;
-	config.passwd = passwd;
-#ifdef HAVE_LIBSSL
-	config.version = (ssl == 1) ? SOCKS5_SSL_V : SOCKS5_V;
-#else
-	config.version = SOCKS5_V;
-#endif
 
-	new_socket_with_socks(hostsocks, portsocks,
-			&config);
+	int r = new_socket_with_socks(&s, sockshost, socksport,
+		uname, passwd, host, port, SOCKS5_V);
 
-	if ( config.soc < 0 ){
+	if ( r < 1 ){
 		ERROR(L_NOTICE, "client: connection error");
 		exit(1);
 	}
 	
 	TRACE(L_VERBOSE, "client: established connection");
-	netcat_like(&config);
+	netcat_like(s.soc);
 	TRACE(L_VERBOSE, "client: close socket ...");
 
-#ifdef HAVE_LIBSSL
-	if (ssl == 1){
-		ssl_close(config.socSsl);
-		ssl_cleaning();
-	}
-#endif
 
-	close(config.soc);
+	close(s.soc);
 }
-
+/*
 void netcat_socks_bind(char *hostsocks, int portsocks, 
 				char *host, int port, 
 				char *uname, char *passwd,
 				int ssl){
+	s_socks_serv_cli_config config;
 
-	ConfigClient config;
 	config.host = host;
 	config.port = port;
 	config.uname = uname;
 	config.passwd = passwd;
-	config.bind = 1;
+
 #ifdef HAVE_LIBSSL
 	config.version = (ssl == 1) ? SOCKS5_SSL_V : SOCKS5_V;
 #else
 	config.version = SOCKS5_V;
 #endif
 
-	new_socket_with_socks(hostsocks, portsocks,
+	int r = new_socket_with_socks(hostsocks, portsocks,
 			&config);
 
-	if ( config.soc < 0 ){
+	if ( r < 1 ){
 		ERROR(L_NOTICE, "client: connection error");
 		exit(1);
 	}
@@ -194,7 +168,7 @@ void netcat_socks_bind(char *hostsocks, int portsocks,
 	
 	close(config.soc);
 }
-
+*/
 struct globalArgs_t {
 	char *host;				// -h option
 	unsigned int port;		// -p option
@@ -373,7 +347,7 @@ void parseArg(int argc, char *argv[]){
 int main (int argc, char *argv[]){
 	parseArg(argc, argv);
 	
-	if ( globalArgs.listen != 0 )
+	/*if ( globalArgs.listen != 0 )
 		netcat_socks_bind(globalArgs.sockshost, globalArgs.socksport, 
 					"0.0.0.0", globalArgs.listen, 
 					globalArgs.uname, globalArgs.passwd,
@@ -382,7 +356,7 @@ int main (int argc, char *argv[]){
 #else
 					0);
 #endif
-	else
+	else*/
 		netcat_socks(globalArgs.sockshost, globalArgs.socksport, 
 					globalArgs.host, globalArgs.port, 
 					globalArgs.uname, globalArgs.passwd,

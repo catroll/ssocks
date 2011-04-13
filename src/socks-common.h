@@ -54,6 +54,7 @@ enum{
 	M_DYNAMIC, /* Run a server and listen, when it receive data
 				* it transmit it to a another socks server,
 				* used by ssocks */
+	M_DYNAMIC_CLIENT,
 };
 
 /* Socks state */
@@ -120,40 +121,42 @@ typedef struct {
 
 /* Socks5 client configuration */
 typedef struct {
-	char *host;
-	int port;
-	char *sockshost;				/* Socks5 destination host */
-	int socksport;				/* Socks5 port host */
-	int version;
-	int loop;				/* Client loop */
+	char *host;				/* Asking host */
+	int port;				/* Asking port */
+
+	char *sockshost;		/* Socks5 destination host */
+	int socksport;			/* Socks5 port host */
+
+	int version;			/* Socks version */
+
 	char *username;			/* Socks5 username */
 	char *password;			/* Socks5 password */
-}s_socks_serv_cli_config;
 
-/* Socks5 server dynamic configuration */
+	/* Set internally */
+	int loop;				/* Client loop */
+	char *allowed_method;   /* Accepted method,
+							 * last need to be NULL */
+	size_t n_allowed_method;
+
+}s_socks_client_config;
+
 typedef struct {
-	s_socks_serv_cli_config client; /* Client configuration
-									 * of dynamic server */
-}s_socks_serv_dyna_config;
+	size_t n_allowed_version;
+	char *allowed_version; /* Accepted version*/
 
-/* Union of configuration to have all in one */
-typedef union {
-	s_socks_serv_dyna_config dyna;
-	s_socks_serv_cli_config cli;
-}s_socks_config;
+	char *allowed_method;  /* Accepted method */
+	size_t n_allowed_method;
+
+}s_socks_server_config;
 
 /* Socks5 configuration
  */
 typedef struct {
 	int type; /* CONFIG_SERVER, CONFIG_SERVER_DYNA, CONFIG_CLIENT */
-	char *allowed_version; /* Version accepted,
-							 *  last need to be NULL */
-	
-	char *allowed_method;  /* Accepted method,
-							 * last need to be NULL */
-	size_t n_allowed_method;
-	
-	s_socks_config config;
+	struct {
+		s_socks_client_config *cli;
+		s_socks_server_config *srv;
+	}config;
 }s_socks_conf;
 
 
@@ -166,18 +169,18 @@ typedef struct {
 
 /* Macro to read and write properly
  */
-#define WRITE_DISP(k, soc, buf, client) \
+#define WRITE_DISP(k, soc, buf) \
 	({ \
 		k = write_socks(soc, buf); \
-		if (k < 0){ disconnection(client); break; } /* Error */ \
+		if (k < 0){ close_socket(soc); break; } /* Error */ \
 		if (k == 0) { break; } /* Need to write again */	\
 		init_buffer(buf); \
 	})
 	
-#define READ_DISP(k, soc, buf, minsize, client) \
+#define READ_DISP(k, soc, buf, minsize) \
 	({ \
 		k = read_socks(soc, buf, minsize); \
-		if (k < 0){ disconnection(client); break; } /* Error */ \
+		if (k < 0){ close_socket(soc); break; } /* Error */ \
 		if (k == 0) { break; } /* Need to read again */ \
 	})
 
