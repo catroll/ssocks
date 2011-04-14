@@ -115,14 +115,14 @@ void netcat_like(int soc){
 
 		
 void netcat_socks(char *sockshost, int socksport, 
-				char *host, int port, 
+				char *host, int port, int listen,
 				char *uname, char *passwd,
 				int ssl){
 	s_socket s;
 
 
 	int r = new_socket_with_socks(&s, sockshost, socksport,
-		uname, passwd, host, port, SOCKS5_V);
+		uname, passwd, host, port, listen, SOCKS5_V, (listen != 0) ? CMD_BIND : CMD_CONNECT);
 
 	if ( r < 1 ){
 		ERROR(L_NOTICE, "client: connection error");
@@ -358,7 +358,7 @@ int main (int argc, char *argv[]){
 #endif
 	else*/
 		netcat_socks(globalArgs.sockshost, globalArgs.socksport, 
-					globalArgs.host, globalArgs.port, 
+					globalArgs.host, globalArgs.port, globalArgs.listen,
 					globalArgs.uname, globalArgs.passwd,
 #ifdef HAVE_LIBSSL
 					globalArgs.ssl);

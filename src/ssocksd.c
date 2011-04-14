@@ -243,7 +243,7 @@ void server(int port){
     fd_set set_write;
     struct sockaddr_in addrS;
     
-    char methods[2] = { 0x00, 0x02 };
+    char methods[2] = { 0x00 };
     char versions[2] = { 0x05, 0 };
     
     s_socks_conf conf;
@@ -252,7 +252,7 @@ void server(int port){
 
     config.allowed_version = versions;
     config.allowed_method = methods;
-    config.n_allowed_method = 2;
+    config.n_allowed_method = 1;
     
     /* Init client tab */
     for (nc = 0; nc < MAXCLI; nc++) 

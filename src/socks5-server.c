@@ -33,6 +33,12 @@
 #include "auth-util.h"
 #include "bor-util.h"
 
+#include <config.h>
+
+#ifdef HAVE_LIBPTHREAD
+	#include <pthread.h>
+#endif
+
 /* Version packet:
  *	+----+----------+----------+
  *	|VER | NMETHODS | METHODS  |
@@ -179,7 +185,7 @@ int analyse_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	/* Extract passwd and fix NULL byte */
 	strncpy(req.passwd, buf->data + 2 + (int)req.ulen + 1, req.plen);
 	*(req.passwd + req.plen) = '\0';
-	
+	//DUMP(buf->data, buf->b);
 	TRACE(L_VERBOSE, "server [%d]: authentication attempt "\
 						"v0x%02X (%d,%d) %s:%s", 
 		s->id, 
@@ -230,6 +236,49 @@ void build_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	buf->b = sizeof(Socks5VersionACK);
 }
 
+typedef struct {
+	s_socks *socks;
+	s_socket *soc_stream;
+	s_socket *soc_bind;
+	s_socket *soc;
+	s_socks_conf *conf;
+	s_buffer *buf;
+}s_thr_req;
+
+void *thr_request(void *d){
+	s_thr_req *data = (s_thr_req*)d;
+
+	int k = analyse_request(data->socks,
+			data->soc_stream, data->soc_bind,
+			data->conf, data->buf);
+
+	if (k < 0){
+		close_socket(data->soc);
+#ifdef HAVE_LIBPTHREAD
+		pthread_exit(NULL);
+#else
+		return NULL;
+#endif
+	} /* Error */
+
+	build_request_ack(data->socks, data->conf,
+			data->soc_stream, data->soc_bind,
+			data->buf);
+
+	data->socks->state = S_W_REQ_ACK;
+
+	/* TODO: need to find a better way to exit select
+	 * Send signal SIGUSER1 to the parent thread to unblock select */
+	if ( kill(getpid(), SIGUSR1) != 0 )
+		perror("kill");
+
+#ifdef HAVE_LIBPTHREAD
+	pthread_exit(NULL);
+#else
+	return NULL;
+#endif
+}
+
 int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 		s_socks_conf *c, s_buffer *buf)
 {
@@ -244,7 +293,6 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 
 	/* Rebuild the packet but don't extract
 	 * DST.ADDR and DST.PORT in Socks5Req struct
-	 *	+----+-----+-------+------+----------+----------+
 	 *	|VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
 	 *	+----+-----+-------+------+----------+----------+
 	 *	| 1  |  1  | X'00' |  1   | Variable |    2     |
@@ -321,12 +369,12 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 			if ( stream->soc >= 0 ){
 				//append_log_client(c, "CONNECT");
 				s->connected = 1;
-				/* In the reply to a CONNECT, BND.PORT contains 
+				/* In the reply to a CONNECT, BND.PORT contains
 				 * the port number that the server assigned to
 				 * connect to the target host, while BND.ADDR
 				 * contains the associated IP address.
 				 */
-				TRACE(L_DEBUG, "client: assigned addr %s", 
+				TRACE(L_DEBUG, "client: assigned addr %s",
 					bor_adrtoa_in(&stream->adrC));
 			}
 			break;
@@ -336,11 +384,11 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 				//append_log_client(c, "BIND");
 				s->connected = 0;
 				s->listen = 1;
-				/* TODO: Need to set bndaddr and bndport 
+				/* TODO: Need to set bndaddr and bndport
 				 * in port binding see RFC:
 				 * The BND.PORT field contains the port number that the
-				 * SOCKS server assigned to listen for an incoming 
-				 * connection. The BND.ADDR field contains 
+				 * SOCKS server assigned to listen for an incoming
+				 * connection. The BND.ADDR field contains
 				 * the associated IP address.
 				 */
 			}
@@ -375,7 +423,7 @@ void build_request_ack(s_socks *s, s_socks_conf *c,
 	
 	Socks5ReqACK res;
 
-	res.ver = s->version;
+	res.ver = 0x05;//s->version;
 	res.rsv = 0;
 	res.atyp = 0x01;
 	
@@ -474,21 +522,25 @@ int dispatch_server_write(s_socket *soc, s_socks *socks,
 			WRITE_DISP(k, soc, buf);
 			if ( socks->auth == 0 ){
 				/* close_socket(soc); */
+				k = -1;
 				break;
 			}
-
-
 			socks->state = S_R_REQ;
 			break;
 
 		case S_W_REQ_ACK:
 			WRITE_DISP(k, soc, buf);
-			if ( socks->listen == 1 ){
+			/* If listen and not connected we are in bind mode */
+			if ( socks->listen == 1 && socks->connected == 0 ){
+				/* Wait until a soc_bind accept a connection */
 				socks->state = S_WAIT;
-			}else if ( socks->connected == 0 ){
-				/* close_socket(soc); */
-			}else{
+			}else if (socks->connected == 1){
+				/* We are connected let's go */
 				socks->state = S_REPLY;
+			}else{
+				/* Error not connected, normally can happen only in bind mode
+				 * we return a error */
+				k = -1;
 			}
 			break;
 
@@ -556,12 +608,33 @@ int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind
 				socks->state = S_WAIT;
 				break;
 			}
-
 			READ_DISP(k, soc, buf,
 				sizeof(Socks5Req)  + 4);
+
+#ifdef HAVE_LIBPTHREAD
+			s_thr_req *d = (s_thr_req*)malloc(sizeof(s_thr_req));
+
+			d->soc_bind = soc_bind;
+			d->soc = soc;
+			d->buf = buf;
+			d->conf = conf;
+			d->socks = socks;
+			d->soc_stream = soc_stream;
+
+	    	/* This avoid to block all socks client when we do a connection */
+	    	pthread_t thr;
+	    	pthread_create( &thr, NULL, thr_request, (void*) d);
+
+	    	/* We never join this thread, to notify the end
+	    	 * it send a signal SIGUSR1 */
+	    	pthread_detach(thr);
+	    	socks->state = S_WAIT;
+#else
+
+
 			k = analyse_request(socks,
 								soc_stream, soc_bind,
-								 conf, buf);
+								conf, buf);
 
 			if (k < 0){ /* close_socket(soc); */ break; } /* Error */
 
@@ -570,7 +643,7 @@ int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind
 								buf);
 
 			socks->state = S_W_REQ_ACK;
-
+#endif
 			break;
 
 		case S_REPLY:

@@ -118,11 +118,16 @@ typedef struct {
 /*typedef struct {
 
 }s_socks_serv_config;*/
+#define CMD_CONNECT 0x01
+#define CMD_BIND 0x02
+#define CMD_UDP 0x03
 
 /* Socks5 client configuration */
 typedef struct {
+	int cmd; 				/* CMD_CONNECT, CMD_BIND, CMD_UDP */
 	char *host;				/* Asking host */
 	int port;				/* Asking port */
+	int listen;				/* Asking bind port */
 
 	char *sockshost;		/* Socks5 destination host */
 	int socksport;			/* Socks5 port host */

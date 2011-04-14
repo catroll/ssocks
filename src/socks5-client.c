@@ -87,7 +87,7 @@ int build_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 
 	uname = c->config.cli->username;
 	passwd = c->config.cli->password;
-	
+
 	if (uname == NULL || passwd == NULL){
 		ERROR(L_NOTICE, "client: need a login/password");
 		return -1;
@@ -105,10 +105,12 @@ int build_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	memcpy(buf->data, &req, 2);
 	strcpy(&buf->data[2], req.uname);
 	buf->data[2+req.ulen] = req.plen;
-	
+	strcpy(&buf->data[2+req.ulen+1], req.passwd);
+
 	/* Reset counter and fix b flag */
 	buf->a = 0;
 	buf->b =  3 + req.ulen + req.plen;
+
 	return 0;
 }
 
@@ -147,23 +149,39 @@ void build_request(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	TRACE(L_DEBUG, "client: try to connect to %s:%d ...", 
 		c->config.cli->host,
 		c->config.cli->port);
-
-	/* Recover destination host and port form the config */
-	char *host = c->config.cli->host;
-	int hostlen = strlen(host);
-	short port = htons(c->config.cli->port);
 	
 	/* Set the request */
 	req.ver = s->version;
-	req.cmd = s->cmd = 0x01; //(s->mode == M_CLIENT_BIND) ? 0x02 : 0x01;
+
 	req.rsv = 0x00;
 	req.atyp = 0x03;	
-	
+
+	char *host;
+	short port;
+
+	req.cmd = s->cmd = c->config.cli->cmd;
+
+	/* Command BIND */
+	if ( req.cmd == CMD_BIND ){
+		host = "0.0.0.0";
+		port = htons(c->config.cli->listen);
+	}else if ( req.cmd == CMD_CONNECT ){
+		host = c->config.cli->host;
+		port = htons(c->config.cli->port);
+	}else{
+		ERROR(L_VERBOSE, "client: configuration error, unknown command");
+		return;
+	}
+
+	/* Recover destination host and port form the config */
+	int hostlen = strlen(host);
+
+
 	/* Copy the request in the req buffer */
 	memcpy(buf->data, &req, sizeof(Socks5Req));
 	buf->data[sizeof(Socks5Req)] = hostlen;
-	strcpy(&buf->data[sizeof(Socks5Req) + 1], host);		
-	memcpy(&buf->data[sizeof(Socks5Req) + 1 + hostlen], &port, 2);	
+	strcpy(&buf->data[sizeof(Socks5Req) + 1], host);
+	memcpy(&buf->data[sizeof(Socks5Req) + 1 + hostlen], &port, 2);
 	
 	/* Reset counter and fix b flag */
 	buf->a = 0;
@@ -186,12 +204,30 @@ int analyse_request_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 		ERROR(L_NOTICE, "client: error, destination is unavailable!");
 		return -1;
 	}
-	
-	TRACE(L_VERBOSE, "client: pass through %s:%d",
-			inet_ntoa(res.bndaddr), ntohs(res.bndport));
-			
-	TRACE(L_DEBUG, "client: connection established");
-	
+
+	if ( c->config.cli->cmd == CMD_BIND ){
+		if ( s->listen == 0 ){
+			s->listen = 1;
+			TRACE(L_VERBOSE, "client: listen on %s:%d",
+					inet_ntoa(res.bndaddr), ntohs(res.bndport));
+		}
+		else{
+			s->connected = 1;
+			TRACE(L_DEBUG, "client: connection established with %s:%d",
+					inet_ntoa(res.bndaddr), ntohs(res.bndport));
+
+		}
+	}else{
+		TRACE(L_VERBOSE, "client: pass through %s:%d",
+				inet_ntoa(res.bndaddr), ntohs(res.bndport));
+
+		TRACE(L_DEBUG, "client: connection established");
+
+		s->connected = 1;
+	}
+
+
+
 	return 0;
 }
 
@@ -212,12 +248,7 @@ int dispatch_client_write(s_socket *soc, s_socks *socks,
 			
 		case S_W_AUTH:
 			WRITE_DISP(k, soc, buf);
-			if ( socks->auth == 0 ){
-				close_socket(soc);
-				break;
-			}
-			
-			socks->state = S_R_REQ_ACK;
+			socks->state = S_R_AUTH_ACK;
 			break;
 			
 		case S_W_REQ:
@@ -288,12 +319,21 @@ int dispatch_client_read(s_socket *soc, s_socket *soc_stream,
 
 			if (k < 0){ close_socket(soc); break; } /* Error */
 
-			build_request(socks, conf, buf);
+			if ( conf->config.cli->cmd == CMD_BIND ){
+				if ( socks->connected == 0 && socks->listen == 1)
+					socks->state = S_R_REQ_ACK;
+				else{
+					socks->state = S_REPLY;
+					/* End, stop client loop */
+					conf->config.cli->loop = 0;
+				}
+			}else{
+				socks->state = S_REPLY;
+				/* End, stop client loop */
+				conf->config.cli->loop = 0;
+			}
 
-			socks->state = S_REPLY;
 
-			/* End, stop client loop */
-			conf->config.cli->loop = 0;
 			init_buffer(buf);
 			break;
 
@@ -418,8 +458,8 @@ void init_select_dynamic (int soc_ec, s_client *tc, int *maxfd,
 int new_socket_with_socks(s_socket *s,
 		char *sockshost, int socksport,
 		char *username, char *password,
-		char *host, int port,
-		int version)
+		char *host, int port, int listen,
+		int version, int cmd)
 {
 	int maxfd = 0, res;
 	fd_set set_read, set_write;
@@ -435,10 +475,12 @@ int new_socket_with_socks(s_socket *s,
 	/* If no username or password  we don't use auth */
 	if ( username == NULL || password == NULL )
 		--conf.config.cli->n_allowed_method;
-		
+
 	conf.config.cli->loop = 1;
+	conf.config.cli->cmd = cmd;
 	conf.config.cli->host = host;
 	conf.config.cli->port = port;
+	conf.config.cli->listen = listen;
 	conf.config.cli->version = version;
 	conf.config.cli->username = username;
 	conf.config.cli->password = password;

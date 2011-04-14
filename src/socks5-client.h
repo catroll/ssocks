@@ -56,5 +56,5 @@ void init_select_dynamic (int soc_ec, s_client *tc, int *maxfd,
 int new_socket_with_socks(s_socket *s,
 		char *sockshost, int socksport,
 		char *username, char *password,
-		char *host, int port,
-		int version);
+		char *host, int port, int listen,
+		int version, int cmd);
