@@ -26,9 +26,11 @@
  * THE SOFTWARE.
  */
 #include "output-util.h"
+#include "socks-common.h"
 
 #include <stdio.h>
 #include <time.h>
+#include <string.h>
 
 FILE *fpLog = 0;
 
@@ -50,24 +52,30 @@ void closeLog(){
 		TRACE(L_DEBUG, "log: close file");
 	}
 }
-
-void writeLog(char *line){
-	
+/* TODO: write uname if auth */
+void writeLog(s_socks *s, s_socket *soc, s_socket *stream){
 	time_t tim=time(NULL);
-    struct tm *now=localtime(&tim);	
+    struct tm *now=localtime(&tim);
+    char *cmd = (s->cmd == 0x02) ? "BIND" : "CONNECT";
+    char ipcli[25], ipsrc[25];
 
-	TRACE(L_NOTICE, "%d/%02d/%02d %02d:%02d:%02d | %s",
-		now->tm_year+1900, now->tm_mon+1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec,
-		line);
-	
-	if ( fpLog != 0 ){
-		TRACE(L_DEBUG, "log: write line");
-		fprintf(fpLog, "%d/%02d/%02d %02d:%02d:%02d | %s\n", 
-			now->tm_year+1900, now->tm_mon+1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec,
-			line);
-	}
-	
-	fflush(fpLog);
+    strcpy(ipcli, bor_adrtoa_in(&soc->adrC));
+    strcpy(ipsrc, bor_adrtoa_in(&stream->adrS));
+
+    TRACE(L_NOTICE, "%d/%02d/%02d %02d:%02d:%02d | %18s <-> %18s | %s | %s",
+    				now->tm_year+1900, now->tm_mon+1, now->tm_mday,
+    				now->tm_hour, now->tm_min, now->tm_sec,
+    				ipcli, ipsrc,
+    				cmd, s->uname);
+
+    if ( fpLog != 0 ){
+		fprintf(fpLog, "%d/%02d/%02d %02d:%02d:%02d | %18s <-> %18s | %s | %s",
+				now->tm_year+1900, now->tm_mon+1, now->tm_mday,
+				now->tm_hour, now->tm_min, now->tm_sec,
+				ipcli, ipsrc,
+				cmd, s->uname);
+
+		fflush(fpLog);
+    }
+
 }
-
-

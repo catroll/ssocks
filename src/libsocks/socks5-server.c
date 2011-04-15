@@ -29,8 +29,9 @@
 #include "socks-common.h"
 #include "socks5-server.h"
 #include "net-util.h"
+#include "log-util.h"
 
-/*#include "auth-util.h"*/
+
 #include "bor-util.h"
 
 #include <config.h>
@@ -237,17 +238,23 @@ int test_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 			s->id);
 		return -1;
 	}
-	/* TODO: Write call back to auth here */
+
 	/* Check username and password in authentication file */
-	/*if ( check_auth(req.uname, req.passwd) == 1 ){
+	if ( c->config.srv->check_auth == NULL ){
+		ERROR(L_NOTICE, "server [%d]: wrong configuration no check_auth callback set",
+			s->id);
+		return -2;
+	}
+	if ( (*c->config.srv->check_auth)(req.uname, req.passwd) == 1 ){
 		TRACE(L_VERBOSE, "server [%d]: authentication OK!", 
 			s->id);
+		strcpy(s->uname, req.uname);
 		s->auth = 1;
 	}else{
 		ERROR(L_VERBOSE, "server [%d]: authentication NOK!", 
 			s->id);
 		s->auth = 0;
-	}*/
+	}
 	
 	return 0;	
 }
@@ -330,6 +337,9 @@ void *thr_request(void *d){
 	build_request_ack(data->socks, data->conf,
 			data->soc_stream, data->soc_bind,
 			data->buf);
+
+	if ( data->socks->connected == 1)
+		writeLog(data->socks, data->soc, data->soc_stream);
 
 	data->socks->state = S_W_REQ_ACK;
 
@@ -788,6 +798,7 @@ int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind
 								buf);
 
 			socks->state = S_W_REQ_ACK;
+			writeLog(socks, soc, soc_stream);
 #endif
 			break;
 

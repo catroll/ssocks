@@ -28,6 +28,7 @@
 #ifndef SOCKS_COMMON__H
 #define SOCKS_COMMON__H
 
+
 #include <netinet/ip.h> /* socket sockaddr_in */
 #include <unistd.h>		/* read and write */
 
@@ -44,6 +45,9 @@
 #define SOCKS4_V 0x04
 #define SOCKS5_V 0x05
 #define SOCKS5_SSL_V 0x06
+
+
+typedef int (*pcheck_auth)(char *uname, char *passwd);
 
 /* Socks mode */
 enum{
@@ -111,6 +115,7 @@ typedef struct {
 	int listen;		/* Listen flag in bind mode, default 0, 
 					 * if -1 error when accept */
 	int cmd;		/* Socks command request */
+	char uname[256];
 }s_socks;
 
 
@@ -152,6 +157,7 @@ typedef struct {
 	char *allowed_method;  /* Accepted method */
 	size_t n_allowed_method;
 
+	pcheck_auth check_auth;
 }s_socks_server_config;
 
 /* Socks5 configuration

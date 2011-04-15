@@ -31,6 +31,8 @@
 #include "socks-common.h"
 #include "client.h"
 
+
+
 int build_request_accept_bind(s_socks *s, s_socks_conf *c,
 		s_socket *stream, s_socket *bind, s_buffer *buf);
 void build_request_ack(s_socks *s, s_socks_conf *c, 

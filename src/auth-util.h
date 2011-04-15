@@ -31,7 +31,6 @@
 #ifndef AUTH_UTILS__H
 #define AUTH_UTILS__H
 
-
 int load_auth_file(char *filename);
 int check_auth(char *uname, char *passwd);
 

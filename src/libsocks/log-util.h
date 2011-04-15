@@ -28,10 +28,11 @@
 #ifndef LOG_UTILS__H
 #define LOG_UTILS__H
 
+#include "socks-common.h"
 
 int openLog(char *filename);
 void closeLog();
-int writeLog(char *line);
+void writeLog(s_socks *s, s_socket *soc, s_socket *stream);
 
 
 #endif /* LOG_UTILS__H */

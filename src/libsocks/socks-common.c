@@ -95,6 +95,8 @@ void init_socks(s_socks *s, int id, int mode){
 	s->listen = 0;		/* Listen flag in bind mode, default 0, 
 					 * if -1 error when accept */
 	s->cmd = 0;		/* Socks command request */	
+
+	s->uname[0] = 0;
 }
 
 

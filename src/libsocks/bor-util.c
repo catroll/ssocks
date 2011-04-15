@@ -171,7 +171,7 @@ int bor_getsockname_in (int soc, struct sockaddr_in *adr)
 /* Renvoie l'adresse d'une chaine en memoire statique contenant l'adresse IPv4
  * sous la forme "a.b.c.d:port", de facon a pouvoir l'afficher. Silencieux.
 */
-char *bor_adrtoa_in (struct sockaddr_in *adr)
+const char *bor_adrtoa_in (struct sockaddr_in *adr)
 {
     static char s[32];
     sprintf (s, "%s:%d", inet_ntoa(adr->sin_addr), ntohs(adr->sin_port));
