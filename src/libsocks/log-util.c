@@ -30,7 +30,6 @@
 
 #include <stdio.h>
 #include <time.h>
-#include <string.h>
 
 FILE *fpLog = 0;
 
@@ -57,10 +56,12 @@ void writeLog(s_socks *s, s_socket *soc, s_socket *stream){
 	time_t tim=time(NULL);
     struct tm *now=localtime(&tim);
     char *cmd = (s->cmd == 0x02) ? "BIND" : "CONNECT";
-    char ipcli[25], ipsrc[25];
+    char ipcli[32], ipsrc[32];
 
-    strcpy(ipcli, bor_adrtoa_in(&soc->adrC));
-    strcpy(ipsrc, bor_adrtoa_in(&stream->adrS));
+    sprintf(ipcli, "%s", bor_adrtoa_in(&soc->adrC));
+
+    sprintf(ipsrc, "%s", bor_adrtoa_in(&stream->adrS));
+
 
     TRACE(L_NOTICE, "%d/%02d/%02d %02d:%02d:%02d | %18s <-> %18s | %s | %s",
     				now->tm_year+1900, now->tm_mon+1, now->tm_mday,

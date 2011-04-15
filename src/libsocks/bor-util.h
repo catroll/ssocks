@@ -58,7 +58,7 @@ int bor_recvfrom_in (int soc, void *buf, size_t len, struct sockaddr_in *adr);
 int bor_connect_in (int soc, struct sockaddr_in *adr);
 int bor_accept_in (int soc, struct sockaddr_in *adr);
 int bor_getsockname_in (int soc, struct sockaddr_in *adr);
-const char *bor_adrtoa_in (struct sockaddr_in *adr);
+char *bor_adrtoa_in (struct sockaddr_in *adr);
 
 
 /* Solution de repli pour __func__ */
