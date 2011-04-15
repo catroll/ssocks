@@ -70,7 +70,7 @@ void writeLog(s_socks *s, s_socket *soc, s_socket *stream){
     				cmd, s->uname);
 
     if ( fpLog != 0 ){
-		fprintf(fpLog, "%d/%02d/%02d %02d:%02d:%02d | %18s <-> %18s | %s | %s",
+		fprintf(fpLog, "%d/%02d/%02d %02d:%02d:%02d | %18s <-> %18s | %s | %s\n",
 				now->tm_year+1900, now->tm_mon+1, now->tm_mday,
 				now->tm_hour, now->tm_min, now->tm_sec,
 				ipcli, ipsrc,
