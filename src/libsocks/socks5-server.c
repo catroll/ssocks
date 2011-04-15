@@ -39,12 +39,34 @@
 	#include <pthread.h>
 #endif
 
-/* Version packet:
- *	+----+----------+----------+
- *	|VER | NMETHODS | METHODS  |
- *	+----+----------+----------+
- *	| 1  |    1     | 1 to 255 |
- *	+----+----------+----------+
+/* Analyze version packet in buf,
+ * It check if version is allowed in c->config.srv->allowed_version
+ * and save it in s->version
+ * It check if version is allowed in c->config.srv->allowed_methods
+ * and save it in s->method
+ *
+ * Return:
+ * 	-1, error wrong version
+ * 	-2, error wrong method
+ * 	 0, success
+ *
+ * From RFC1928:
+ * The client connects to the server, and sends a version
+ * identifier/method selection message:
+ *
+ * +----+----------+----------+
+ * |VER | NMETHODS | METHODS  |
+ * +----+----------+----------+
+ * | 1  |    1     | 1 to 255 |
+ * +----+----------+----------+
+ *
+ * The values currently defined for METHOD are:
+ * o  X'00' NO AUTHENTICATION REQUIRED (supported)
+ * o  X'01' GSSAPI
+ * o  X'02' USERNAME/PASSWORD (supported)
+ * o  X'03' to X'7F' IANA ASSIGNED
+ * o  X'80' to X'FE' RESERVED FOR PRIVATE METHODS
+ * o  X'FF' NO ACCEPTABLE METHODS
  */
 int analyse_version(s_socks *s, s_socks_conf *c, s_buffer *buf){
 	int i, j;
@@ -124,13 +146,17 @@ int analyse_version(s_socks *s, s_socks_conf *c, s_buffer *buf){
 	return 0;
 }
 
-/*
- * Version ack packet:
- *	+----+--------+
- *	|VER | METHOD |
- *	+----+--------+
- *	| 1  |   1    |
- *	+----+--------+
+/* Build version packet ack in buf
+ *
+ * From RFC1928:
+ * The server selects from one of the methods given in METHODS, and
+ * sends a METHOD selection message:
+ *
+ * +----+--------+
+ * |VER | METHOD |
+ * +----+--------+
+ * | 1  |   1    |
+ * +----+--------+
  */
 void build_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 {
@@ -147,7 +173,27 @@ void build_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	buf->b = sizeof(Socks5VersionACK);
 }
 
-
+/* Analyse authentication packet and check uname/password
+ * It set s->auth to 0 if authentication failed and to 1 if success
+ *
+ * Return:
+ *  -1 error, wrong subnegotiation version
+ *   0 success
+ * From RFC1929:
+ * Once the SOCKS V5 server has started, and the client has selected the
+ * Username/Password Authentication protocol, the Username/Password
+ * subnegotiation begins.  This begins with the client producing a
+ * Username/Password request:
+ *
+ * +----+------+----------+------+----------+
+ * |VER | ULEN |  UNAME   | PLEN |  PASSWD  |
+ * +----+------+----------+------+----------+
+ * | 1  |  1   | 1 to 255 |  1   | 1 to 255 |
+ * +----+------+----------+------+----------+
+ *
+ * The VER field contains the current version of the subnegotiation,
+ * which is X'01'
+ */
 int analyse_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 {
 	Socks5Auth req;
@@ -155,13 +201,7 @@ int analyse_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	TRACE(L_DEBUG, "server [%d]: testing authentication ...", 
 		s->id);
 	
-	/* Rebuild the packet in Socks5Auth struct
-	 *  +----+------+----------+------+----------+
-	 *	|VER | ULEN |  UNAME   | PLEN |  PASSWD  |
-	 *	+----+------+----------+------+----------+
-	 *	| 1  |  1   | 1 to 255 |  1   | 1 to 255 |
-	 *	+----+------+----------+------+----------+
-	 */
+	/* Rebuild the packet in Socks5Auth struct */
 	memcpy(&req, buf->data, 2);
 	memcpy(&req.plen, buf->data + 2 + (int)req.ulen , 2);
 
@@ -193,7 +233,7 @@ int analyse_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	
 	/* Test version need 0x01 RFC */
 	if ( req.ver != 0x01 ){
-		ERROR(L_NOTICE, "server [%d]: wrong version need to be 0x01", 
+		ERROR(L_NOTICE, "server [%d]: wrong subnegotiation version need to be 0x01",
 			s->id);
 		return -1;
 	}
@@ -202,24 +242,35 @@ int analyse_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	/*if ( check_auth(req.uname, req.passwd) == 1 ){
 		TRACE(L_VERBOSE, "server [%d]: authentication OK!", 
 			s->id);
-		//append_log_client(c, "%s OK", req.uname);
 		s->auth = 1;
 	}else{
 		ERROR(L_VERBOSE, "server [%d]: authentication NOK!", 
 			s->id);
-		//append_log_client(c, "%s NOK", req.uname);
 		s->auth = 0;
 	}*/
 	
 	return 0;	
 }
 
-/*
- *  +----+--------+
- *	|VER | STATUS |
- *	+----+--------+
- *	| 1  |   1    |
- *	+----+--------+
+/* Build authentication packet ack in buf
+ * Check s->auth to set status field
+ *
+ * From RFC1929:
+ * The server verifies the supplied UNAME and PASSWD, and sends the
+ * following response:
+ *
+ * +----+--------+
+ * |VER | STATUS |
+ * +----+--------+
+ * | 1  |   1    |
+ * +----+--------+
+ *
+ * The VER field contains the current version of the subnegotiation,
+ * which is X'01'
+ *
+ * A STATUS field of X'00' indicates success. If the server returns a
+ *`failure' (STATUS value other than X'00') status, it MUST close the
+ * connection.
  */
 void build_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 {
@@ -236,6 +287,7 @@ void build_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	buf->b = sizeof(Socks5VersionACK);
 }
 
+/* Internal usage to thread the analyse_request */
 typedef struct {
 	s_socks *socks;
 	s_socket *soc_stream;
@@ -245,6 +297,19 @@ typedef struct {
 	s_buffer *buf;
 }s_thr_req;
 
+/* Wrap the content of case R_REQ in dispatch_server_read
+ * It send a signal SIGUSR1 when it finish to wakeup select
+ *
+ * Return:
+ * 	If phtread lib enable never return phtread_exit(NULL)
+ * 	else return NULL
+ *
+ * Warm:
+ * 	the parameter need to be allocate with a malloc
+ *
+ * TODO: look in thr_request if analyse_request failed
+ * if close_socket work properly
+ * */
 void *thr_request(void *d){
 	s_thr_req *data = (s_thr_req*)d;
 
@@ -282,6 +347,40 @@ void *thr_request(void *d){
 #endif
 }
 
+/* Analyze request packet in buf, and execute the request
+ *
+ * Return:
+ * 	-1, error, wrong atyp
+ * 	-2, error, wrong cmd
+ * 	 0, success
+ *
+ * From RFC1928:
+ * The SOCKS request is formed as follows:
+ * +----+-----+-------+------+----------+----------+
+ * |VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
+ * +----+-----+-------+------+----------+----------+
+ * | 1  |  1  | X'00' |  1   | Variable |    2     |
+ * +----+-----+-------+------+----------+----------+
+ *
+ * Where:
+ * o  VER    protocol version: X'05'
+ * o  CMD
+ *	 o  CONNECT X'01' ( define in CMD_CONNECT )
+ *	 o  BIND X'02'    ( define in CMD_BIND )
+ *	 o  UDP ASSOCIATE X'03'  ( define in CMD_UDP )
+ * o  RSV    RESERVED
+ * o  ATYP   address type of following address
+ *	 o  IP V4 address: X'01'
+ *	 o  DOMAINNAME: X'03'
+ *	 o  IP V6 address: X'04'
+ * o  DST.ADDR       desired destination address
+ * o  DST.PORT desired destination port in network octet
+ *	 order
+ *
+ * TODO: server implement UDP support CMD_UDP
+ * TODO: server implement ATYP with IPv4
+ * TODO: server implement ATYP with IPv6
+ */
 int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 		s_socks_conf *c, s_buffer *buf)
 {
@@ -295,13 +394,7 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 	unsigned int l;
 
 	/* Rebuild the packet but don't extract
-	 * DST.ADDR and DST.PORT in Socks5Req struct
-	 *	|VER | CMD |  RSV  | ATYP | DST.ADDR | DST.PORT |
-	 *	+----+-----+-------+------+----------+----------+
-	 *	| 1  |  1  | X'00' |  1   | Variable |    2     |
-	 *	+----+-----+-------+------+----------+----------+
-	 *
-	 */
+	 * DST.ADDR and DST.PORT in Socks5Req struct */
 	memcpy(&req, buf->data, sizeof(Socks5Req));
 	TRACE(L_DEBUG, "server [%d]: v0x%x, cmd 0x%x, rsv 0x%x, atyp 0x%x", 
 		s->id, req.ver,
@@ -315,7 +408,6 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 	 *    -  IP V4 address: X'01'
 	 *    -  DOMAINNAME: X'03'
 	 *    -  IP V6 address: X'04'
-	 *
 	 */
 	switch ( req.atyp ){
 		case 0x03: /* Domain name */
@@ -356,8 +448,6 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 			return -1;
 	}
 	
-	//append_log_client(c, "v%d %s:%d", s->version, domain, port);
-	
 	/* CMD:
 	 *  - CONNECT X'01'
 	 *  - BIND X'02'
@@ -372,11 +462,7 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 			if ( stream->soc >= 0 ){
 				//append_log_client(c, "CONNECT");
 				s->connected = 1;
-				/* In the reply to a CONNECT, BND.PORT contains
-				 * the port number that the server assigned to
-				 * connect to the target host, while BND.ADDR
-				 * contains the associated IP address.
-				 */
+
 				TRACE(L_DEBUG, "client: assigned addr %s",
 					bor_adrtoa_in(&stream->adrC));
 			}
@@ -387,19 +473,12 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 				//append_log_client(c, "BIND");
 				s->connected = 0;
 				s->listen = 1;
-				/* TODO: Need to set bndaddr and bndport
-				 * in port binding see RFC:
-				 * The BND.PORT field contains the port number that the
-				 * SOCKS server assigned to listen for an incoming
-				 * connection. The BND.ADDR field contains
-				 * the associated IP address.
-				 */
+
 			}
 
 			break;
 		/* TODO: udp support */
 		default :
-			//append_log_client(c, "ERROR request cmd");
 			ERROR(L_NOTICE, "server [%d]: don't support udp", 
 				s->id);
 			return -2;
@@ -413,12 +492,39 @@ int analyse_request_dynamic(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	return -1;
 }
 
-/* Request ack packet:
- *	+----+-----+-------+------+----------+----------+
- *	|VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |
- *	+----+-----+-------+------+----------+----------+
- *	| 1  |  1  | X'00' |  1   | Variable |    2     |
- *	+----+-----+-------+------+----------+----------+
+/* Build request packet ack in buf
+ *
+ * From RFC1928:
+ * The server verifies the supplied UNAME and PASSWD, and sends the
+ * following response:
+ * +----+-----+-------+------+----------+----------+
+ * |VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |
+ * +----+-----+-------+------+----------+----------+
+ * | 1  |  1  | X'00' |  1   | Variable |    2     |
+ * +----+-----+-------+------+----------+----------+
+ *
+ * Where:
+ * o  VER    protocol version: X'05'
+ * o  REP    Reply field:
+ *	 o  X'00' succeeded
+ *	 o  X'01' general SOCKS server failure
+ *	 o  X'02' connection not allowed by ruleset
+ *	 o  X'03' Network unreachable
+ *	 o  X'04' Host unreachable
+ *	 o  X'05' Connection refused
+ * 	 o  X'06' TTL expired
+ *	 o  X'07' Command not supported
+ *	 o  X'08' Address type not supported
+ *	 o  X'09' to X'FF' unassigned
+ * o  RSV    RESERVED (must be set to 0x00)
+ * o  ATYP   address type of following address
+ * o  IP V4 address: X'01'
+ *	 o  DOMAINNAME: X'03'
+ *	 o  IP V6 address: X'04'
+ * o  BND.ADDR       server bound address
+ * o  BND.PORT       server bound port in network octet order
+ *
+ * TODO: Handle server request error, in case of fails send 0X01
  */
 void build_request_ack(s_socks *s, s_socks_conf *c, 
 		s_socket *stream, s_socket *bind, s_buffer *buf)
@@ -426,7 +532,7 @@ void build_request_ack(s_socks *s, s_socks_conf *c,
 	
 	Socks5ReqACK res;
 
-	res.ver = 0x05;//s->version;
+	res.ver = s->version;
 	res.rsv = 0;
 	res.atyp = 0x01;
 	
@@ -436,6 +542,10 @@ void build_request_ack(s_socks *s, s_socks_conf *c,
 		case 0x01:
 			/* 0x00 succeeded, 0x01 general SOCKS failure ... */
 			if ( s->connected == 1){
+				/* In the reply to a CONNECT, BND.PORT contains
+				 * the port number that the server assigned to
+				 * connect to the target host, while BND.ADDR
+				 * contains the associated IP address. */
 				res.rep = 0x00;
 				memcpy(&res.bndaddr, &stream->adrC.sin_addr.s_addr,
 						sizeof(stream->adrC.sin_addr.s_addr));
@@ -447,14 +557,24 @@ void build_request_ack(s_socks *s, s_socks_conf *c,
 			break;
 			
 		case 0x02:
-			/* 0x00 succeeded, 0x01 general SOCKS failure ... */
+			/* In the reply to a BIND, two replies are sent from the SOCKS server
+			 * to the client during a BIND operation. */
 			if ( s->listen == 1 && s->connected == 0 ){
+				/* First replies
+				 * The BND.PORT field contains the port number that the
+				 * SOCKS server assigned to listen for an incoming connection.  The
+				 * BND.ADDR field contains the associated IP address.*/
 				res.rep = 0x00;
 				memcpy(&res.bndaddr, &bind->adrC.sin_addr.s_addr,
 						sizeof(bind->adrC.sin_addr.s_addr));
 				memcpy(&res.bndport, &bind->adrC.sin_port,
 						sizeof(bind->adrC.sin_port));
 			}else if ( s->listen == 1 && s->connected == 1 ){
+				/* Second replies
+				 * The second reply occurs only after the anticipated incoming
+	   	   	   	 * connection succeeds or fails. In the second reply,
+	   	   	   	 * the BND.PORT and BND.ADDR fields contain the
+	   	   	   	 * address and port number of the connecting host.*/
 				res.rep = 0x00;
 				memcpy(&res.bndaddr, &stream->adrC.sin_addr.s_addr,
 						sizeof(stream->adrC.sin_addr.s_addr));
@@ -480,6 +600,15 @@ void build_request_ack(s_socks *s, s_socks_conf *c,
 	buf->b = sizeof(Socks5ReqACK);
 }
 
+/* Build request accept bind packet in buf
+ * It's accept a connection on the socket bind
+ * and associate with socket stream
+ *
+ * Return:
+ * 	-1 error, accept error socket problem
+ * 	 0 success
+ *
+ */
 int build_request_accept_bind(s_socks *s, s_socks_conf *c,
 		s_socket *stream, s_socket *bind, s_buffer *buf)
 {
@@ -498,8 +627,6 @@ int build_request_accept_bind(s_socks *s, s_socks_conf *c,
 	
 	TRACE(L_DEBUG, "server: established connection with %s", 
 		bor_adrtoa_in(&stream->adrC));
-		
-	//append_log_client(c, "ACCEPT %s", bor_adrtoa_in(&stream->adrC));
 	
 	build_request_ack(s, c, stream, bind, buf);
 	
