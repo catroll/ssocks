@@ -1,5 +1,5 @@
 AM_CFLAGS=-Wall 
-AM_LDFLAGS = -lsocks -Llibsocks/ -static
+AM_LDFLAGS = -lsocks -Llibsocks/
 
 SUBDIRS = libsocks
 

@@ -5,7 +5,14 @@ AC_PREREQ([2.65])
 AC_INIT([ssocks], [0.0.9-dev], [h.caron@codsec.com])
 AC_CONFIG_SRCDIR([src/auth-util.c])
 AC_CONFIG_HEADERS([config.h])
+
+# libtool
 AC_PROG_LIBTOOL
+AC_DISABLE_SHARED 
+AC_ENABLE_STATIC
+AC_SUBST(LIBTOOL_DEPS)
+
+AM_CONDITIONAL(USE_STATIC, test $enable_static = yes)
 
 # Checks for programs.
 AC_PROG_CC

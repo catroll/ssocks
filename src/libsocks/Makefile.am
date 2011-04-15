@@ -1,14 +1,17 @@
 # General settings
 
 # Avoid install of this lib need to be static
-#lib_LTLIBRARIES = libsocks.la
+if USE_STATIC
 noinst_LTLIBRARIES = libsocks.la
+else
+lib_LTLIBRARIES = libsocks.la
+endif
 
 libsocks_la_LDFLAGS = -version-info 1:0:0
-libsocks_la_SOURCES = bor-util.c Makefile.am net-util.h output-util.h \
+libsocks_la_SOURCES = bor-util.c net-util.h output-util.h \
 socks5-client.h socks5-server.h socks-common.h ssl-util.h \
 bor-util.h net-util.c output-util.c socks5-client.c  \
-socks5-server.c socks-common.c client.c log-util.c log-util.h \ 
+socks5-server.c socks-common.c  log-util.c log-util.h \
 client.c client.h
 
 if WITH_SSL
