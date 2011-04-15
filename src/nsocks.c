@@ -38,8 +38,6 @@
 #include <config.h>
 #include <getopt.h>
 
-
-
 int boucle_princ = 1;
 void capte_fin (int sig){
     TRACE(L_VERBOSE, "client: signal %d caught\n", sig);
@@ -83,7 +81,6 @@ void netcat_like(int soc){
 			/* Read on socket ? */
 			if (FD_ISSET (soc, &set_read)){
 				k = read(soc, buf+buf_b, sizeof(buf)-buf_b-1);
-
 				if ( k < 0 ) { perror("read socket"); close(soc); exit(1); }
 				if ( k == 0 ) { ERROR(L_DEBUG, "client: read 0 bytes!"); boucle_princ = 0; }
 				//printf("client: read %d bytes in socket\n", k);	
@@ -93,7 +90,6 @@ void netcat_like(int soc){
 			/* Write on socket ? */
 			if(FD_ISSET (soc, &set_write)){
 				k = write(soc, buf+buf_a, buf_b - buf_a);
-					
 				if ( k < 0 ) { perror("write socket"); boucle_princ = 0; }
 				//printf("client: wrote %d bytes on socket\n", k);
 				buf_a += k;
@@ -136,39 +132,7 @@ void netcat_socks(char *sockshost, int socksport,
 
 	close(s.soc);
 }
-/*
-void netcat_socks_bind(char *hostsocks, int portsocks, 
-				char *host, int port, 
-				char *uname, char *passwd,
-				int ssl){
-	s_socks_serv_cli_config config;
 
-	config.host = host;
-	config.port = port;
-	config.uname = uname;
-	config.passwd = passwd;
-
-#ifdef HAVE_LIBSSL
-	config.version = (ssl == 1) ? SOCKS5_SSL_V : SOCKS5_V;
-#else
-	config.version = SOCKS5_V;
-#endif
-
-	int r = new_socket_with_socks(hostsocks, portsocks,
-			&config);
-
-	if ( r < 1 ){
-		ERROR(L_NOTICE, "client: connection error");
-		exit(1);
-	}
-	
-	TRACE(L_VERBOSE, "client: established connection");
-	netcat_like(&config);
-	TRACE(L_VERBOSE, "client: close socket ...");
-	
-	close(config.soc);
-}
-*/
 struct globalArgs_t {
 	char *host;				// -h option
 	unsigned int port;		// -p option
