@@ -29,13 +29,13 @@
 #include "client.h"
 
 void build_version(s_socks *s, s_socks_conf *c, s_buffer *buf);
-int analyse_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
+int test_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
 		
 int build_auth(s_socks *s, s_socks_conf *c, s_buffer *buf);
-int analyse_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
+int test_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
 
 void build_request(s_socks *s, s_socks_conf *c, s_buffer *buf);
-int analyse_request_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
+int test_request_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
 
 
 int dispatch_client_write(s_socket *soc, s_socks *socks,

@@ -36,15 +36,15 @@ int build_request_accept_bind(s_socks *s, s_socks_conf *c,
 void build_request_ack(s_socks *s, s_socks_conf *c, 
 		s_socket *stream, s_socket *bind, s_buffer *buf);
 		
-int analyse_request_dynamic(s_socks *s, s_socks_conf *c, s_buffer *buf);
+int test_request_dynamic(s_socks *s, s_socks_conf *c, s_buffer *buf);
 int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 		s_socks_conf *c, s_buffer *buf);
 		
 void build_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
-int analyse_auth(s_socks *s, s_socks_conf *c, s_buffer *buf);
+int test_auth(s_socks *s, s_socks_conf *c, s_buffer *buf);
 
 void build_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
-int analyse_version(s_socks *s, s_socks_conf *c, s_buffer *buf);
+int test_version(s_socks *s, s_socks_conf *c, s_buffer *buf);
 
 
 void dispatch_server(s_client *client, fd_set *set_read, fd_set *set_write);
