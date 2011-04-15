@@ -39,7 +39,7 @@
 	#include <pthread.h>
 #endif
 
-/* Analyze version packet in buf,
+/* Test version packet in buf,
  * It check if version is allowed in c->config.srv->allowed_version
  * and save it in s->version
  * It check if version is allowed in c->config.srv->allowed_methods
@@ -68,7 +68,7 @@
  * o  X'80' to X'FE' RESERVED FOR PRIVATE METHODS
  * o  X'FF' NO ACCEPTABLE METHODS
  */
-int analyse_version(s_socks *s, s_socks_conf *c, s_buffer *buf){
+int test_version(s_socks *s, s_socks_conf *c, s_buffer *buf){
 	int i, j;
 	Socks5Version req;
 	TRACE(L_DEBUG, "server [%d]: testing version ...", 
@@ -194,7 +194,7 @@ void build_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
  * The VER field contains the current version of the subnegotiation,
  * which is X'01'
  */
-int analyse_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
+int test_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 {
 	Socks5Auth req;
 	
@@ -347,7 +347,7 @@ void *thr_request(void *d){
 #endif
 }
 
-/* Analyze request packet in buf, and execute the request
+/* Test request packet in buf, and execute the request
  *
  * Return:
  * 	-1, error, wrong atyp
@@ -460,7 +460,6 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 			stream->soc = new_client_socket(domain, port, &stream->adrC, 
 				&stream->adrS);
 			if ( stream->soc >= 0 ){
-				//append_log_client(c, "CONNECT");
 				s->connected = 1;
 
 				TRACE(L_DEBUG, "client: assigned addr %s",
@@ -470,7 +469,6 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 		case 0x02: /* TCP/IP port binding */
 			bind->soc = new_listen_socket(port, 10, &bind->adrC);
 			if ( bind->soc >= 0 ){
-				//append_log_client(c, "BIND");
 				s->connected = 0;
 				s->listen = 1;
 
@@ -487,7 +485,7 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 	return 0;
 }
 
-int analyse_request_dynamic(s_socks *s, s_socks_conf *c, s_buffer *buf)
+int test_request_dynamic(s_socks *s, s_socks_conf *c, s_buffer *buf)
 {
 	return -1;
 }
@@ -633,6 +631,14 @@ int build_request_accept_bind(s_socks *s, s_socks_conf *c,
 	return 0;
 }
 
+/* Dispatch server write state, following socks5 RFC
+ * In each state, it deal with write buf on soc and
+ * change state to next
+ *
+ * Return:
+ * 	-1, error something happen we need to disconnect the client
+ * 	 0, success
+ */
 int dispatch_server_write(s_socket *soc, s_socks *socks,
 		s_buffer *buf, s_socks_conf *conf)
 {
@@ -687,6 +693,15 @@ int dispatch_server_write(s_socket *soc, s_socks *socks,
 	return k;
 }
 
+/* Dispatch server read state, following socks5 RFC
+ * In each state, it deal with read in buf with soc,
+ * test the packet with right function, build a reponse and
+ * change state to next.
+ *
+ * Return:
+ * 	-1, error something happen we need to disconnect the client
+ * 	 0, success
+ */
 int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind,
 		s_socks *socks, s_buffer *buf, s_buffer *buf_stream, s_socks_conf *conf){
 	int k = 0;
@@ -696,7 +711,7 @@ int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind
 		case S_R_VER:
 			READ_DISP(k, soc, buf, 3);
 
-			k = analyse_version(socks, conf,
+			k = test_version(socks, conf,
 								buf);
 			if (k < 0){ /* close_socket(soc); */ break; } /* Error */
 
@@ -710,7 +725,7 @@ int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind
 		case S_R_AUTH:
 			READ_DISP(k, soc, buf, 4);
 
-			k = analyse_auth(socks, conf,
+			k = test_auth(socks, conf,
 								buf);
 			if (k < 0){ /* close_socket(soc); */ break; } /* Error */
 
@@ -788,7 +803,13 @@ int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind
 	return k;
 }
 
-
+/* Dispatch server, it's normally called after a select
+ * Search client with socket in set_read and set_write and call
+ * the right dispatcher.
+ *
+ * It's responsible for disconnecting the client
+ * in case of protocol error or network error.
+ */
 void dispatch_server(s_client *client, fd_set *set_read, fd_set *set_write)
 {
 	int k = 0;
@@ -828,6 +849,10 @@ void dispatch_server(s_client *client, fd_set *set_read, fd_set *set_write)
 	}
 }
 
+/* Prepare set_read and set_write for a select  (ssocksd)
+ * Initialize set_read and set_write with right socket in function of socks state
+ * It's responsible to set maxfd to max soc->soc value in set_read or set_write
+ */
 void init_select_server_cli (s_socket *soc,	s_socks *s, s_buffer *buf,
 		int *maxfd,	fd_set *set_read, fd_set *set_write){
 	if ( soc->soc != -1 ){
@@ -854,6 +879,10 @@ void init_select_server_cli (s_socket *soc,	s_socks *s, s_buffer *buf,
 	}
 }
 
+/* Prepare set_read and set_write for a select  (read and reply)
+ * Initialize set_read and set_write with right socket in function of socks state
+ * It's responsible to set maxfd to max soc->soc value in set_read or set_write
+ */
 void init_select_server_stream (s_socket *soc, s_buffer *buf,
 		int *maxfd,	fd_set *set_read, fd_set *set_write){
 	if ( soc->soc != -1 ){

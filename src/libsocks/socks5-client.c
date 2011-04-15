@@ -69,7 +69,7 @@ void build_version(s_socks *s, s_socks_conf *c, s_buffer *buf)
 }
 
 
-/* Analyze version packet ack in buf,
+/* Test version packet ack in buf,
  * It check if version is same as start and save it in s->version
  * It check if method return by the server is supported and save it in s->method
  * Return:
@@ -87,7 +87,7 @@ void build_version(s_socks *s, s_socks_conf *c, s_buffer *buf)
  * | 1  |   1    |
  * +----+--------+
  */
-int analyse_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
+int test_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 {
 	Socks5VersionACK res;
 	int j;
@@ -181,7 +181,7 @@ int build_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	return 0;
 }
 
-/* Analyze authentication packet ack in buf,
+/* Test authentication packet ack in buf,
  * It check if subnegotiation version is 0x01
  * It check if authentication was success
  * Set s->auth = 1, means authentication was success
@@ -208,7 +208,7 @@ int build_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
  *`failure' (STATUS value other than X'00') status, it MUST close the
  * connection.
  */
-int analyse_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
+int test_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 {
 	Socks5AuthACK res;
 	TRACE(L_DEBUG, "client: testing authentication ack ...");	
@@ -317,7 +317,7 @@ void build_request(s_socks *s, s_socks_conf *c, s_buffer *buf)
 }
 
 
-/* Analyze request packet ack in buf
+/* Test request packet ack in buf
  *
  * Return:
  * 	-1, error, the request could not be completed
@@ -356,7 +356,7 @@ void build_request(s_socks *s, s_socks_conf *c, s_buffer *buf)
  *
  * TODO: Handle client request error
  */
-int analyse_request_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
+int test_request_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 {
 	Socks5ReqACK res;
 	
@@ -415,7 +415,7 @@ int analyse_request_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 
 /* Dispatch client write state, following socks5 RFC
  * In each state, it deal with write buf on soc and
- * change to next state
+ * change state to next
  *
  * Return:
  * 	-1, error something happen we need to disconnect the client
@@ -460,8 +460,8 @@ int dispatch_client_write(s_socket *soc, s_socks *socks,
 
 /* Dispatch client read state, following socks5 RFC
  * In each state, it deal with read in buf with soc,
- * analyze the packet with right function, build a reponse and
- * change to next state.
+ * test the packet with right function, build a reponse and
+ * change state to next.
  *
  * Return:
  * 	-1, error something happen we need to disconnect the client
@@ -475,7 +475,7 @@ int dispatch_client_read(s_socket *soc, s_socket *soc_stream,
 		case S_R_VER_ACK:
 			READ_DISP(k, soc, buf, sizeof(Socks5VersionACK));
 
-			k = analyse_version_ack(socks, conf, buf);
+			k = test_version_ack(socks, conf, buf);
 			if (k < 0){ close_socket(soc); break; } /* Error */
 
 			/* It means need to send a authentication packet */
@@ -499,7 +499,7 @@ int dispatch_client_read(s_socket *soc, s_socket *soc_stream,
 		case S_R_AUTH_ACK:
 			READ_DISP(k, soc, buf, sizeof(Socks5AuthACK));
 
-			k = analyse_auth_ack(socks, conf, buf);
+			k = test_auth_ack(socks, conf, buf);
 			if (k < 0){ break; } /* Error */
 
 			build_request(socks, conf, buf);
@@ -509,7 +509,7 @@ int dispatch_client_read(s_socket *soc, s_socket *soc_stream,
 		case S_R_REQ_ACK:
 			READ_DISP(k, soc, buf, sizeof(Socks5ReqACK));
 
-			k = analyse_request_ack(socks, conf, buf);
+			k = test_request_ack(socks, conf, buf);
 			if (k < 0){ close_socket(soc); break; } /* Error */
 
 			if ( conf->config.cli->cmd == CMD_BIND ){
