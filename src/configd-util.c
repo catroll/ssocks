@@ -25,8 +25,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 #include "configd-util.h"
-#include "output-util.h"
+#include <libsocks/output-util.h>
 
 #include <stdio.h>
 #include <strings.h>       

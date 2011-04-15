@@ -28,5 +28,7 @@ stamp-h.in
 *~
 *.swp
 *.o
+*.la
+*.lo
 .deps
 *.exe

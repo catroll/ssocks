@@ -28,12 +28,12 @@
  * THE SOFTWARE.
  */
 
-#include "bor-util.h"
-#include "net-util.h"
+#include <libsocks/bor-util.h>
+#include <libsocks/net-util.h>
 
-#include "output-util.h"
-#include "socks-common.h"
-#include "socks5-client.h"
+#include <libsocks/output-util.h>
+#include <libsocks/socks-common.h>
+#include <libsocks/socks5-client.h>
 
 #include <config.h>
 #include <getopt.h>

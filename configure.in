@@ -5,6 +5,7 @@ AC_PREREQ([2.65])
 AC_INIT([ssocks], [0.0.9-dev], [h.caron@codsec.com])
 AC_CONFIG_SRCDIR([src/auth-util.c])
 AC_CONFIG_HEADERS([config.h])
+AC_PROG_LIBTOOL
 
 # Checks for programs.
 AC_PROG_CC
@@ -43,6 +44,7 @@ AC_CHECK_FUNCS([atexit gethostbyname gettimeofday inet_ntoa memmove memset selec
 
 AC_CONFIG_FILES([Makefile
 		man/Makefile
+		src/libsocks/Makefile
 		src/Makefile
 		scripts/Makefile])
 

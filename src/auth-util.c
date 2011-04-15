@@ -31,7 +31,7 @@
 #define MAX_AUTH_LOGIN 128
 #define MAX_AUTH_UNAME 255
 
-#include "output-util.h"
+#include <libsocks/output-util.h>
 
 #include <stdio.h>
 #include <string.h>
