@@ -253,6 +253,7 @@ void *thr_request(void *d){
 			data->conf, data->buf);
 
 	if (k < 0){
+		free(d);
 		close_socket(data->soc);
 #ifdef HAVE_LIBPTHREAD
 		pthread_exit(NULL);
@@ -271,6 +272,8 @@ void *thr_request(void *d){
 	 * Send signal SIGUSER1 to the parent thread to unblock select */
 	if ( kill(getpid(), SIGUSR1) != 0 )
 		perror("kill");
+
+	free(d);
 
 #ifdef HAVE_LIBPTHREAD
 	pthread_exit(NULL);
