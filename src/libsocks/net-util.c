@@ -102,6 +102,26 @@ int new_listen_socket (int nport, int backlog, struct sockaddr_in *addrS){
     return soc_ec;
 }
 
+int new_client_socket_no(char *nameS, int nport, struct sockaddr_in *addrC,
+		struct sockaddr_in *addrS){
+	int soc = new_socket_tcpip(0, addrC);
+
+	if ( soc < 0 ){
+		return -1;
+	}
+	set_non_blocking(soc);
+	if ( build_addr_server(nameS, nport, addrS) < 0 ){
+		close(soc);
+		return -1;
+	}
+
+	TRACE(L_VERBOSE, "client: server connection on %s:%d ...",
+		nameS, ntohs(addrS->sin_port));
+	connect (soc, (struct sockaddr *) addrS, sizeof(struct sockaddr_in));
+
+	return soc;
+}
+
 int new_client_socket(char *nameS, int nport,
 		struct sockaddr_in *addrC, struct sockaddr_in *addrS){
 	int soc;

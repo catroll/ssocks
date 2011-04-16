@@ -502,6 +502,12 @@ int dispatch_client_read(s_socket *soc, s_socket *soc_stream,
 			k = test_auth_ack(socks, conf, buf);
 			if (k < 0){ break; } /* Error */
 
+			if ( socks->mode == M_DYNAMIC_CLIENT ){
+				/* In dynamic mode we do negociation with socks server and reply */
+				socks->state = S_REPLY;
+				break;
+			}
+
 			build_request(socks, conf, buf);
 			socks->state = S_W_REQ;
 			break;
@@ -582,7 +588,7 @@ void dispatch_dynamic(s_client *client, fd_set *set_read, fd_set *set_write)
 
 	else if (client->soc.soc != -1 &&
 			FD_ISSET (client->soc.soc, set_write))
-		k = dispatch_server_write(&client->soc, &client->socks, &client->buf, client->conf);
+		k = dispatch_server_write(&client->soc, &client->soc_stream, &client->socks, &client->buf, client->conf);
 	if (k < 0){ disconnection(client);	return;}
 
 	/* Dispatch stream socket */
@@ -661,7 +667,7 @@ void init_select_dynamic (int soc_ec, s_client *tc, int *maxfd,
 		}
 
 		init_select_server_cli(&client->soc, &client->socks, &client->buf,
-				maxfd, set_read, set_write);
+				 &client->stream_buf, maxfd, set_read, set_write);
 
 		init_select_client(&client->soc_stream, &client->socks_stream,
 				&client->stream_buf,
