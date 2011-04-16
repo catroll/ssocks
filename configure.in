@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.65])
-AC_INIT([ssocks], [0.0.9-dev], [h.caron@codsec.com])
+AC_INIT([ssocks], [0.0.9], [h.caron@codsec.com])
 AC_CONFIG_SRCDIR([src/auth-util.c])
 AC_CONFIG_HEADERS([config.h])
 
@@ -22,7 +22,7 @@ AM_INIT_AUTOMAKE
 #([ssocks], [0.0.1])
 
 # Checks for libraries.
-AC_CHECK_LIB(pthread, pthread_create)
+#AC_CHECK_LIB(pthread, pthread_create)
 
 # Check SSL
 AC_ARG_WITH(ssl,
