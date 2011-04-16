@@ -57,8 +57,8 @@ void write_log(s_socks *s, s_socket *soc, s_socket *stream){
     struct tm *now=localtime(&tim);
     char *cmd = (s->cmd == 0x02) ? "BIND" : "CONNECT";
     char ipcli[32], ipsrc[32];
-    sprintf(ipcli, "%s", bor_adrtoa_in(soc->adrC));
-    sprintf(ipsrc, "%s", bor_adrtoa_in(stream->adrS));
+    sprintf(ipcli, "%s", bor_adrtoa_in(&soc->adrC));
+    sprintf(ipsrc, "%s", bor_adrtoa_in(&stream->adrS));
 
 
     TRACE(L_NOTICE, "%d/%02d/%02d %02d:%02d:%02d | %21s <-> %21s | %s | %s",
