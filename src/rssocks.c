@@ -66,17 +66,18 @@ void capte_fin (int sig){
 
 void usage(char *name){
 	printf("rsSocks Reverse Socks5 Server v%s\n", PACKAGE_VERSION);
-	printf("Used to bypass browser limitation with authentication\n");
+	printf("It's a reverse socks5 server, you set the socks arg (host:port)\n");
+	printf("to your rcsocks instance. It connect back on and wait for request\n");
 	printf("Usage:\n");
-	printf("\t%s --socks socksserv.com:1080\n", name);
-	printf("\t%s --socks localhost:1080\n", name);
-	printf("\t%s --socks socksserv.com:1080 --uname admin --passwd abcde\n", name);
-	printf("\t%s -s socksserv.com:1080 -u admin -p abcde -l 1080 -b\n", name);
+	printf("\t%s --socks rcsocksserv:1080 -b\n", name);
+	printf("\t%s --socks rcsocksserv:1080\n", name);
+	//printf("\t%s --socks socksserv.com:1080 --uname admin --passwd abcde\n", name);
+	//printf("\t%s -s socksserv.com:1080 -u admin -p abcde -l 1080 -b\n", name);
 	printf("Options:\n");
 	printf("\t--verbose (increase verbose level)\n\n");
 	printf("\t--socks {host:port}\n");
-	printf("\t--uname {uname}\n");
-	printf("\t--passwd {passwd}\n");
+	//printf("\t--uname {uname}\n");
+	//printf("\t--passwd {passwd}\n");
 #ifdef HAVE_LIBSSL
 	printf("\t--cert  {certfile.crt} Certificate of dst server (enable SSL)\n");
 #endif
@@ -87,7 +88,7 @@ void usage(char *name){
 
 void reverse_server(char *sockshost, int socksport,
 		char *uname, char *passwd, int ssl){
-    int soc_ec = -1, maxfd, res, nc;
+    int soc_ec = -1, maxfd, res, nc, k;
     fd_set set_read;
     fd_set set_write;
 
@@ -127,18 +128,6 @@ void reverse_server(char *sockshost, int socksport,
     /* Init client tab */
     for (nc = 0; nc < MAXCLI; nc++) init_client (&tc[nc], nc, M_SERVER, &conf);
 
-    /* Open connection to the socks client */
-    /*for (nc = 0; nc < MAXCLI; nc++) if ( tc[nc].soc.soc == -1 ) break;
-    if (nc >= MAXCLI) goto fin_serveur;
-    tc[nc].soc.soc = new_client_socket(conf.config.cli->sockshost,
-    		conf.config.cli->socksport, &tc[nc].soc.adrC,
-    		&tc[nc].soc.adrS);
-	if ( tc[nc].soc.soc < 0 ){
-		TRACE(L_DEBUG, "client: connection to %s error",
-				conf.config.cli->sockshost);
-		goto fin_serveur;
-	}*/
-
 
 	if ( globalArgs.background == 1 ){
 		TRACE(L_NOTICE, "server: background ...");
@@ -151,8 +140,8 @@ void reverse_server(char *sockshost, int socksport,
     bor_signal (SIGINT, capte_fin, SA_RESTART);
 
     while (boucle_princ) {
-        init_select_server_reverse(tc, &maxfd, 50, &set_read, &set_write);
-
+        k = init_select_server_reverse(tc, &maxfd, 50, &set_read, &set_write);
+        if ( k < 0 ){ goto fin_serveur; }
         res = select (maxfd+1, &set_read, &set_write, NULL, NULL);
 
         if (res > 0) { /* Search eligible sockets */

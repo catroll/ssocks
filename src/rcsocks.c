@@ -72,10 +72,14 @@ void usage(char *name){
 	printf("rcSocks Reverse Client Socks5 v%s\n", PACKAGE_VERSION);
 	printf("Usage:\n");
 	printf("\t%s -p 1088 -l 1080 -b\n", name);
+	printf("\t%s -p 1088 -l 1080\n", name);
+	printf("In this config you run rssocks like this:\n");
+	printf("rssocks --socks rcsocksserv:1080\n");
+	printf("and set your tool to connect trought the socks5 server rcsocksserv:1088\n\n");
 	printf("Options:\n");
 	printf("\t--verbose (increase verbose level)\n\n");
-	printf("\t--listen {port}\n");
-	printf("\t--port {port}\n");
+	printf("\t--listen {port} where rssocks connect back\n");
+	printf("\t--port {port} the socks5 port you want\n");
 #ifdef HAVE_LIBSSL
 	printf("\t--cert  {certfile.crt} Certificate of dst server (enable SSL)\n");
 #endif
@@ -109,6 +113,7 @@ void new_connection_reverse (int soc_ec, s_client *tc, s_socket *socks_pool)
     	init_client(&tc[nc], tc[nc].id, tc[nc].socks.mode, tc[nc].conf);
         tc[nc].soc.soc = soc_tmp;
         tc[nc].socks.state = S_REPLY;
+        tc[nc].socks.connected = 1;
 
         memcpy(&tc[nc].soc_stream, &socks_pool[nc2], sizeof(s_socks));
 
@@ -173,11 +178,11 @@ void init_select_reverse (int soc_ec, int soc_ec_cli, s_client *tc, int *maxfd,
     for (nc = 0; nc < MAXCLI; nc++){
 		s_client *client = &tc[nc];
 
-		init_select_server_cli(&client->soc, &client->socks, &client->buf,
-				maxfd, set_read, set_write);
+		init_select_server_cli(&client->soc, &client->socks,
+				&client->buf, &client->stream_buf,	maxfd, set_read, set_write);
 
-		init_select_server_stream(&client->soc_stream, &client->stream_buf,
-				maxfd, set_read, set_write);
+		init_select_server_stream(&client->soc_stream, &client->socks,
+				&client->stream_buf, &client->buf, maxfd, set_read, set_write);
 
 
 		if ( client->soc_bind.soc != -1 ){
@@ -205,9 +210,11 @@ void server_relay(int port, int listen, int ssl){
     for (nc = 0; nc < MAXCLI; nc++)
     	init_client (&tc[nc], nc, 0, NULL);
 
+    TRACE(L_NOTICE, "server: set listening client socks relay ...");
     soc_ec = new_listen_socket (port, MAXCLI, &addrS);
     if (soc_ec < 0) goto fin_serveur;
 
+    TRACE(L_NOTICE, "server: set server relay ...");
     soc_ec_cli = new_listen_socket (listen, MAXCLI, &addrS);
     if (soc_ec_cli < 0) goto fin_serveur;
 

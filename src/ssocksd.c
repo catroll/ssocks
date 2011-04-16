@@ -237,7 +237,9 @@ void parseArg(int argc, char *argv[]){
 void capte_usr1(){
 	TRACE(L_DEBUG, "server: catch USR1 signal ...");
 }
-
+void capte_sigpipe(){
+	TRACE(L_DEBUG, "server: catch SIGPIPE signal ...");
+}
 void server(int port){
     int soc_ec = -1, maxfd, res, nc;  
     s_client tc[MAXCLI];  
@@ -283,7 +285,7 @@ void server(int port){
 
     /* Need in daemon to remove the PID file properly */
     bor_signal (SIGTERM, capte_fin, SA_RESTART);
-
+    bor_signal (SIGPIPE, capte_sigpipe, SA_RESTART);
     /* TODO: Find a better way to exit the select and recall the init_select
      * SIGUSR1 is send by a thread to unblock the select */
     bor_signal (SIGUSR1, capte_usr1, SA_RESTART);

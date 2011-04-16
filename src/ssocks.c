@@ -91,6 +91,7 @@ void usage(char *name){
 	printf("Bug report %s\n", PACKAGE_BUGREPORT);
 }
 
+/* TODO: Non blocking connect */
 void server_relay(char *sockshost, int socksport, int port,
 		char *uname, char *passwd, int ssl){
     int soc_ec = -1, maxfd, res, nc;  
