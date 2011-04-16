@@ -198,7 +198,7 @@ void parseArg(int argc, char *argv[]){
 	
 
 	if ( globalArgsServer.filelog[0] != 0 ){
-		openLog(globalArgsServer.filelog);
+		open_log(globalArgsServer.filelog);
 	}
 	if ( globalArgsServer.fileauth[0] != 0 ){
 		globalArgsServer.guest = 0;
@@ -319,7 +319,7 @@ fin_serveur:
 #endif
     TRACE(L_NOTICE, "server: closing sockets ...");
     if (soc_ec != -1) close (soc_ec);
-    closeLog();
+    close_log();
     for (nc = 0; nc < MAXCLI; nc++) disconnection(&tc[nc]);
     if ( globalArgsServer.daemon == 1 )	removePID(PID_FILE);
 }

@@ -33,7 +33,7 @@
 
 FILE *fpLog = 0;
 
-int openLog(char *filename){
+int open_log(char *filename){
 	TRACE(L_DEBUG, "log: open file %s ...", filename);
 	
 	fpLog = fopen(filename, "a+");
@@ -45,32 +45,30 @@ int openLog(char *filename){
 	return 0;
 }
 
-void closeLog(){
+void close_log(){
 	if ( fpLog != 0 ){
 		fclose(fpLog);
 		TRACE(L_DEBUG, "log: close file");
 	}
 }
-/* TODO: write uname if auth */
-void writeLog(s_socks *s, s_socket *soc, s_socket *stream){
+
+void write_log(s_socks *s, s_socket *soc, s_socket *stream){
 	time_t tim=time(NULL);
     struct tm *now=localtime(&tim);
     char *cmd = (s->cmd == 0x02) ? "BIND" : "CONNECT";
     char ipcli[32], ipsrc[32];
-
-    sprintf(ipcli, "%s", bor_adrtoa_in(&soc->adrC));
-
-    sprintf(ipsrc, "%s", bor_adrtoa_in(&stream->adrS));
+    sprintf(ipcli, "%s", bor_adrtoa_in(soc->adrC));
+    sprintf(ipsrc, "%s", bor_adrtoa_in(stream->adrS));
 
 
-    TRACE(L_NOTICE, "%d/%02d/%02d %02d:%02d:%02d | %18s <-> %18s | %s | %s",
+    TRACE(L_NOTICE, "%d/%02d/%02d %02d:%02d:%02d | %21s <-> %21s | %s | %s",
     				now->tm_year+1900, now->tm_mon+1, now->tm_mday,
     				now->tm_hour, now->tm_min, now->tm_sec,
     				ipcli, ipsrc,
     				cmd, s->uname);
 
     if ( fpLog != 0 ){
-		fprintf(fpLog, "%d/%02d/%02d %02d:%02d:%02d | %18s <-> %18s | %s | %s\n",
+		fprintf(fpLog, "%d/%02d/%02d %02d:%02d:%02d | %21s <-> %21s | %s | %s\n",
 				now->tm_year+1900, now->tm_mon+1, now->tm_mday,
 				now->tm_hour, now->tm_min, now->tm_sec,
 				ipcli, ipsrc,

@@ -30,9 +30,9 @@
 
 #include "socks-common.h"
 
-int openLog(char *filename);
-void closeLog();
-void writeLog(s_socks *s, s_socket *soc, s_socket *stream);
+int open_log(char *filename);
+void close_log();
+void write_log(s_socks *s, s_socket *soc, s_socket *stream);
 
 
 #endif /* LOG_UTILS__H */

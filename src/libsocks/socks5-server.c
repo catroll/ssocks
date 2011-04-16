@@ -74,6 +74,25 @@ int test_version(s_socks *s, s_socks_conf *c, s_buffer *buf){
 	
 	memcpy(&req, buf->data, sizeof(Socks5Version));
 
+	/* Testing version */
+	char *allowed = c->config.srv->allowed_version;
+	while ( *allowed != 0 ){
+		if ( *allowed == req.ver ){
+			s->version = *allowed;
+			TRACE(L_DEBUG, "server [%d]: version %d",
+				s->id, s->version);
+			break;
+		}
+		allowed++;
+	}
+
+	/* No valid version find */
+	if ( s->version == -1 ){
+		ERROR(L_VERBOSE, "server [%d]: version error (%d)",
+			s->id, req.ver);
+		return -1;
+	}
+
 	/* If too much method we truncate */
 	if (sizeof(req.methods) < (unsigned int)req.nmethods){
 		ERROR(L_VERBOSE, "server [%d]: truncate methods", 
@@ -101,24 +120,7 @@ int test_version(s_socks *s, s_socks_conf *c, s_buffer *buf){
 		printf("\n");
 	}
 	
-	/* Testing version */
-	char *allowed = c->config.srv->allowed_version;
-	while ( *allowed != 0 ){
-		if ( *allowed == req.ver ){
-			s->version = *allowed;
-			TRACE(L_DEBUG, "server [%d]: version %d", 
-				s->id, s->version);
-			break;
-		}
-		allowed++;
-	}
-	
-	/* No valid version find */
-	if ( s->version == -1 ){
-		ERROR(L_VERBOSE, "server [%d]: version error (%d)", 
-			s->id, req.ver);	
-		return -1;	
-	}
+
 	
 	/* Searching valid methods:
 	 * Methods 0x00, no authentication
@@ -641,7 +643,7 @@ int dispatch_server_write(s_socket *soc, s_socket *soc_stream, s_socks *socks,
 				/* Wait until a soc_bind accept a connection */
 				socks->state = S_WAIT;
 			}else if (socks->connected == 1){
-				writeLog(socks, soc, soc_stream);
+				write_log(socks, soc, soc_stream);
 				/* We are connected let's go */
 				socks->state = S_REPLY;
 			}else{
