@@ -3,10 +3,6 @@ and RFC 1929 (Authentication for SOCKS V5), a reverse socks server and client,
 a netcat like tool, which supports socks5 with authentication 
 and a socks5 relay (run a server and send to a another socks5 server).
 
-sSocks is a package which contains: a socks5 server implements RFC 1928 (SOCKS V5) 
-and RFC 1929 (Authentication for SOCKS V5), a reverse socks server and client, 
-a netcat like tool and a socks5 relay 
-
 ------------------------------------------------------------------------
 Features:
 	- Configuration file
