@@ -63,15 +63,17 @@ Warning: don't content init script
 
 ------------------------------------------------------------------------
 Warning, if you import from git, you need to do:
- $ autoreconf
- $ automake --add-missing
-
+ $ ./bootstrap.sh
+ 
 PS for me: To avoid to wait when you debug the server and some 
 socket don't close properly
  # echo 1 > /proc/sys/net/ipv4/tcp_tw_recycle
  
  To compile with dynamic lib
  $ ./configure --disble-static
+ 
+ To enable SSL
+ $ ./configure with-ssl
  
  Just for remember (this by default actually)
  $ ./configure --enable-static --disable-shared
