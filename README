@@ -1,7 +1,11 @@
-sSocks is socks5 server, implements RFC 1928 (SOCKS V5) and RFC 1929 
-(Authentication for SOCKS V5), a netcat like tool, which supports socks5 
-with authentication and a socks5 relay (run a server and send to a 
-another socks5 server).
+sSocks is a package which contains: a socks5 server implements RFC 1928 (SOCKS V5) 
+and RFC 1929 (Authentication for SOCKS V5), a reverse socks server and client, 
+a netcat like tool, which supports socks5 with authentication 
+and a socks5 relay (run a server and send to a another socks5 server).
+
+sSocks is a package which contains: a socks5 server implements RFC 1928 (SOCKS V5) 
+and RFC 1929 (Authentication for SOCKS V5), a reverse socks server and client, 
+a netcat like tool and a socks5 relay 
 
 ------------------------------------------------------------------------
 Features:
@@ -25,33 +29,24 @@ TODO:
 	- SSL implements out of RFC
 	
 ------------------------------------------------------------------------
-test@remoteserver$ ssocksd -s -c keys/server.crt -k keys/server.key \
-		-a ssocksd.auth
-
-you@laptop$ ssocks --ca src/keys/ca.crt -s remoteserver:1080 \
-		-u admin -p abcde -l 1088 
-
-Now set your browser to use localhost 1088 with protocole socks5.
-All you'r request pass trought the localsocks
-that handles connect to remote socks5 server establish a ssl tunnel, 
-check the certificate, authenticate you with admin:abcde, and transmit data.
-
-In the style of ssh:
-$ ssh -D1088 you@remoteserver
-------------------------------------------------------------------------
- - nsocks is a netcat like through a socks5 (usefull to test socks server)
- - ssocksd is the socks5 server
- - ssocks is a socks5 relay, it run a socks server on your localhost interface, and
- relay all data to the server specified in parameter (works but under dev)
- - /etc/ssocksd.conf is server configuration file
- - /etc/ssocksd.auth is password file
- - /var/log/ssocksd.log is default log (specified in configuration file)
- - /var/run/ssocksd.pid is create in daemon mode and delete 
-when it receive SIGTERM
+Software:
+  - nsocks is a netcat like through a socks5 (usefull to test socks server)
+  - ssocksd is the socks5 server
+  - ssocks is a socks5 relay, it run a socks server on your localhost interface,
+ and relay all data to the server specified in parameter (works but under dev)
+  - rssocks is a reverse socks5 server
+  - rcsocks is a reverse socks5 client
+File:
+  - /etc/ssocksd.conf is server configuration file
+  - /etc/ssocksd.auth is password file
+  - /var/log/ssocksd.log is default log (specified in configuration file)
+  - /var/run/ssocksd.pid is create in daemon mode and delete 
+ when it receive SIGTERM
 
 ------------------------------------------------------------------------
 More information see man page:
 ssocksd (1), nsocks (1), ssocks (1), ssocksd.auth (5), ssocksd.conf (5)
+rssocks (1), rcsocks (1)
 
 ------------------------------------------------------------------------
 Ubuntu/debian install:
@@ -74,7 +69,6 @@ Warning: don't content init script
 Warning, if you import from git, you need to do:
  $ autoreconf
  $ automake --add-missing
-
 
 PS for me: To avoid to wait when you debug the server and some 
 socket don't close properly
