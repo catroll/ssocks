@@ -23,7 +23,7 @@ TODO:
 	listen on all interfaces)
 	- Stock password with a hash ( md5 or sha256 )
 	- GSSAPI auth support ( maybe )
-	- Set number of client max ( actually 128 is in client.h MAXCLI var )
+	- Set number of client max ( actually 255 is in client.h MAXCLI var )
 	- Add --pid-file option to server 
 	- ssocks bind localhost, not all
 	- SSL implements out of RFC

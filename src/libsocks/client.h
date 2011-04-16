@@ -30,7 +30,7 @@
 
 #include "socks-common.h"
 
-#define MAXCLI 128
+#define MAXCLI 256
 #define BUFFER_SIZE 4096
 
 typedef struct{
