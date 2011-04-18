@@ -12,7 +12,7 @@ libsocks_la_SOURCES = bor-util.c net-util.h output-util.h \
 socks5-client.h socks5-server.h socks-common.h ssl-util.h \
 bor-util.h net-util.c output-util.c socks5-client.c  \
 socks5-server.c socks-common.c  log-util.c log-util.h \
-client.c client.h
+client.c client.h socks4.c socks4.h
 
 if WITH_SSL
 libsocks_la_SOURCES += ssl-util.h ssl-util.c

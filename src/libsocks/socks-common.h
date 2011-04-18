@@ -223,10 +223,12 @@ typedef struct {
 } Socks5Version;
 
 /* Socks5 version packet ACK */
+#pragma pack(push, 2)
 typedef struct {
 	char ver;
 	char method;
 } Socks5VersionACK;
+#pragma pack(pop)
 
 /* Socks5 authentication packet */
 typedef struct {
@@ -238,10 +240,12 @@ typedef struct {
 } Socks5Auth;
 
 /* Socks5 authentication packet ACK */
+#pragma pack(push, 2)
 typedef struct {
 	char ver;
 	char status;
 } Socks5AuthACK;
+#pragma pack(pop)
 
 /* Socks5 request packet */
 typedef struct {
@@ -264,7 +268,23 @@ typedef struct {
 	struct in_addr bndaddr; /* uint32_t */
 	uint16_t  bndport;
 } Socks5ReqACK;
-#pragma pack(pop) /* End of change alignment */
 
+
+typedef struct {
+	char ver;
+	char cmd;
+	uint16_t dstport;
+	char dstadr[4];
+	char *uid;
+}Socks4Req;
+
+typedef struct{
+	char ver; /* Need to be null */
+	char rep;
+	char ign[2];
+	char ign2[4];
+}Socks4ReqAck;
+
+#pragma pack(pop) /* End of change alignment */
 
 #endif /* SOCKS5_COMMON__H */

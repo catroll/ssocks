@@ -1,19 +1,19 @@
 /*
- *      net-util.h
- *      
- *      Created on: 2011-03-30
+ *      socks4.h
+ *
+ *      Created on: 2011-04-11
  *      Author:     Hugo Caron
  *      Email:      <h.caron@codsec.com>
- * 
+ *
  * Copyright (C) 2011 by Hugo Caron
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  *
@@ -25,33 +25,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifndef SOCKS4__H
+#define SOCKS4__H
 
-#ifndef NET_UTIL__H
-#define NET_UTIL__H
+#include "socks-common.h"
+#include "client.h"
 
+int test_request4(s_socks *s, s_socket *stream, s_socket *bind,
+		s_socks_conf *c, s_buffer *buf);
 
-#include <netinet/ip.h>
-#include <config.h>
+void build_request_ack4(s_socks *s, s_socks_conf *c,
+		s_socket *stream, s_socket *bind, s_buffer *buf);
 
-
-/* Prototypes  */
-int new_socket_tcpip(int port, struct sockaddr_in *addr);
-int build_addr_server(char *name, int port, struct sockaddr_in *addr);
-/*int new_listen_socket (int nport, int maxpend);*/
-int new_listen_socket (int nport, int maxpend, struct sockaddr_in *addrS);
-int new_client_socket(char *nameS, uint16_t nport,
-		struct sockaddr_in *addrC, struct sockaddr_in *addrS);
-
-int new_client_socket_no(char *nameS, uint16_t nport, struct sockaddr_in *addrC,
-		struct sockaddr_in *addrS);
-
-int new_client_socket_no_ip(char ip[4], uint16_t nport, struct sockaddr_in *addrC,
-		struct sockaddr_in *addrS);
-
-int set_blocking(int fd);
-int set_non_blocking(int fd);
-
-
-
-#endif /* NET_UTIL__H */
+#endif /* SOCKS5_SERVER__H */
 

@@ -93,6 +93,10 @@ int test_version(s_socks *s, s_socks_conf *c, s_buffer *buf){
 		return -1;
 	}
 
+	if ( s->version == SOCKS4_V){
+		return 0;
+	}
+
 	/* If too much method we truncate */
 	if (sizeof(req.methods) < (unsigned int)req.nmethods){
 		ERROR(L_VERBOSE, "server [%d]: truncate methods", 
@@ -324,7 +328,6 @@ void build_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
  *	 order
  *
  * TODO: server implement UDP support CMD_UDP
- * TODO: server implement ATYP with IPv4
  * TODO: server implement ATYP with IPv6
  */
 int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
@@ -334,11 +337,11 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 	TRACE(L_DEBUG, "server [%d]: testing client request ...", 
 		s->id);
 
-	int port = 0, *p;
+	uint16_t port = 0, *p;
 	char domain[256];
-	unsigned char chAddr[4];
-	unsigned int l;
-
+	char chAddr[4];
+	char l;
+	struct in_addr addr;
 	/* Rebuild the packet but don't extract
 	 * DST.ADDR and DST.PORT in Socks5Req struct */
 	memcpy(&req, buf->data, sizeof(Socks5Req));
@@ -368,21 +371,20 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 			
 			/* After domain we have the port
 			 * big endian on 2 bytes*/
-			p = (int*)(buf->data + sizeof(Socks5Req) + l  + 1) ;
+			p = (uint16_t*)(buf->data + sizeof(Socks5Req) + l  + 1) ;
 			port = ntohs(*p);
-			
+
 			TRACE(L_DEBUG, "Server [%d]: asking for %s:%d", s->id, domain, port);
 			break;
 
 		case 0x01: /* IP address */
 			memcpy(&chAddr, (buf->data + sizeof(Socks5Req)), 
 					sizeof(chAddr));
-			sprintf(domain, "%d.%d.%d.%d", chAddr[0],
-				chAddr[1], chAddr[2], chAddr[3]);
+			inet_aton(chAddr, &addr);
 				
 			/* After domain we have the port
 			 * big endian on 2 bytes*/
-			p = (int*)(buf->data + sizeof(Socks5Req) + 4  ) ;
+			p = (uint16_t*)(buf->data + sizeof(Socks5Req) + 4  ) ;
 			port = ntohs(*p);
 			break;
 
@@ -405,7 +407,10 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 	 */
 	switch(req.cmd){
 		case 0x01: /* TCP/IP Stream connection */
-			stream->soc = new_client_socket_no(domain, port, &stream->adrC, &stream->adrS);
+			if ( req.atyp == 0x01 )
+				stream->soc = new_client_socket_no_ip(chAddr, port, &stream->adrC, &stream->adrS);
+			else
+				stream->soc = new_client_socket_no(domain, port, &stream->adrC, &stream->adrS);
 			if ( stream->soc < 0 ){
 				return -3;
 			}
@@ -632,10 +637,17 @@ int dispatch_server_write(s_socket *soc, s_socket *soc_stream, s_socks *socks,
 			break;
 
 		case S_W_REQ_ACK:
-			if ( buf_empty(buf) )
-				build_request_ack(socks, conf,
-					soc_stream, NULL,
-					buf);
+			if ( buf_empty(buf) ){
+				if ( socks->version == SOCKS4_V ){
+					build_request_ack4(socks, conf,
+						soc_stream, NULL,
+						buf);
+				}else{
+					build_request_ack(socks, conf,
+						soc_stream, NULL,
+						buf);
+				}
+			}
 
 			WRITE_DISP(k, soc, buf);
 			/* If listen and not connected we are in bind mode */
@@ -687,7 +699,16 @@ int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind
 			k = test_version(socks, conf,
 								buf);
 			if (k < 0){ /* close_socket(soc); */ break; } /* Error */
+			if ( socks->version == SOCKS4_V ){
+				k = test_request4(socks,
+						soc_stream, soc_bind,
+						conf, buf);
+				init_buffer(buf);
+				if (k < 0){ break; } /* Error */
 
+				socks->state = S_WAIT;
+				break;
+			}
 			build_version_ack(socks, conf,
 								buf);
 
