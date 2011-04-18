@@ -95,6 +95,7 @@ enum {
  */
 typedef struct {
 	int soc;  /* Socket */
+	int con;  /* Connected flag to used with non blocking connect */
 #ifdef HAVE_LIBSSL
 	SSL *ssl; /* SSL socket */
 #endif
