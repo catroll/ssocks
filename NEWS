@@ -2,11 +2,18 @@
 Release v0.0.10:
 	- Fix, non blocking bug on ssocksd 
 	- True support of request address type IPv4
-	- Add socks4 support, fast implementation but should works
+	- Add socks4 support, fast implementation but should works ( if auth is 
+	enable socks4 is disable )
+	- Add to rssocks a parameter --ncon ( -n ) to set the number of 
+	back connection	you want ( default 25 )
+	- Set non blocking connect on rssocks
+	
+	
 -------------------------------------------------------------------------------
 	2011/04/17
 Upload video, how to use rssocks and rcsocks in pentest mode
 http://www.vimeo.com/22515255
+
 -------------------------------------------------------------------------------
 	2011/04/16
 Release v0.0.9:

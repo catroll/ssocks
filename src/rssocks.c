@@ -56,6 +56,8 @@ struct globalArgs_t {
 
 	char *sockshost;		// -s host:port
 	int socksport;
+
+	int ncon;				// -n option
 } globalArgs;
 
 int boucle_princ = 1;
@@ -76,6 +78,7 @@ void usage(char *name){
 	printf("Options:\n");
 	printf("\t--verbose (increase verbose level)\n\n");
 	printf("\t--socks {host:port}\n");
+	printf("\t--ncon {nb of reverse connection}\n");
 	//printf("\t--uname {uname}\n");
 	//printf("\t--passwd {passwd}\n");
 #ifdef HAVE_LIBSSL
@@ -87,7 +90,7 @@ void usage(char *name){
 }
 
 void reverse_server(char *sockshost, int socksport,
-		char *uname, char *passwd, int ssl){
+		char *uname, char *passwd, int ssl, int ncon){
     int soc_ec = -1, maxfd, res, nc, k;
     fd_set set_read;
     fd_set set_write;
@@ -140,13 +143,17 @@ void reverse_server(char *sockshost, int socksport,
     bor_signal (SIGINT, capte_fin, SA_RESTART);
 
     while (boucle_princ) {
-        k = init_select_server_reverse(tc, &maxfd, 50, &set_read, &set_write);
+        k = init_select_server_reverse(tc, &maxfd, ncon, &set_read, &set_write);
         if ( k < 0 ){ goto fin_serveur; }
         res = select (maxfd+1, &set_read, &set_write, NULL, NULL);
 
         if (res > 0) { /* Search eligible sockets */
             for (nc = 0; nc < MAXCLI; nc++){
-				dispatch_server(&tc[nc], &set_read, &set_write);
+				k = dispatch_server(&tc[nc], &set_read, &set_write);
+				if (k == -2 ){
+					boucle_princ = 0;
+					break;
+				}
 			}
         } else if ( res == 0){
 
@@ -169,7 +176,7 @@ fin_serveur:
 
 void parse_arg(int argc, char *argv[]){
 	memset(&globalArgs, 0, sizeof(globalArgs));
-
+	globalArgs.ncon = 25;
 	int c;
 	while (1){
 		static struct option long_options[] = {
@@ -179,6 +186,7 @@ void parse_arg(int argc, char *argv[]){
 			{"socks",   required_argument, 0, 's'},
 			{"uname",   required_argument, 0, 'u'},
 			{"passwd",  required_argument, 0, 'p'},
+			{"ncon",    required_argument, 0, 'n'},
 #ifdef HAVE_LIBSSL
 			{"cert",      required_argument, 0, 'c'},
 #endif
@@ -188,7 +196,7 @@ void parse_arg(int argc, char *argv[]){
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
-		c = getopt_long (argc, argv, "h?bvc:s:u:p:l:",
+		c = getopt_long (argc, argv, "h?bvc:s:u:p:l:n:",
 					long_options, &option_index);
 
 		/* Detect the end of the options. */
@@ -251,6 +259,10 @@ void parse_arg(int argc, char *argv[]){
 				globalArgs.passwd = optarg;
 				break;
 
+			case 'n':
+				globalArgs.ncon = atoi(optarg);
+				break;
+
 			case '?':
 				/* getopt_long already printed an error message. */
 				usage(argv[0]);
@@ -299,8 +311,8 @@ int main (int argc, char *argv[]){
 #ifdef HAVE_LIBSSL
 			globalArgs.ssl
 #else
-			0
+			0,
 #endif
-			);
+			globalArgs.ncon);
 	exit(0);
 }

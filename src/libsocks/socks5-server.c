@@ -75,15 +75,15 @@ int test_version(s_socks *s, s_socks_conf *c, s_buffer *buf){
 	memcpy(&req, buf->data, sizeof(Socks5Version));
 
 	/* Testing version */
-	char *allowed = c->config.srv->allowed_version;
-	while ( *allowed != 0 ){
+	char *allowed;
+	for (i=0; i <  c->config.srv->n_allowed_version; ++i){
+		allowed = &c->config.srv->allowed_version[i];
 		if ( *allowed == req.ver ){
 			s->version = *allowed;
 			TRACE(L_DEBUG, "server [%d]: version %d",
 				s->id, s->version);
 			break;
 		}
-		allowed++;
 	}
 
 	/* No valid version find */
@@ -615,6 +615,30 @@ int dispatch_server_write(s_socket *soc, s_socket *soc_stream, s_socks *socks,
 		s_buffer *buf, s_socks_conf *conf)
 {
 	int k = 0;
+	socklen_t socklen = sizeof(int);
+	if ( soc->con == 0 ) {
+		if ( getsockopt(soc->soc, SOL_SOCKET, SO_ERROR, &k, &socklen) < 0){
+			perror("getsockopt");
+			k = -1;
+			return;
+		}
+
+		if (k != 0){
+			ERROR(L_VERBOSE, "client: error %d", k);
+			k = -1;
+			return;
+		}
+
+		/* Recovering the client address and port after the connection*/
+		if ( bor_getsockname_in(soc->soc, &soc->adrC) < 0 ){
+			k = -1;
+			return;
+		}
+		TRACE(L_VERBOSE, "server [%d] : server connection on %s OK",socks->id,
+			bor_adrtoa_in(&soc->adrS));
+		soc->con = 1;
+		return;
+	}
 	switch(socks->state){
 		case S_W_VER_ACK:
 			WRITE_DISP(k, soc, buf);
@@ -778,7 +802,7 @@ int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind
  * It's responsible for disconnecting the client
  * in case of protocol error or network error.
  */
-void dispatch_server(s_client *client, fd_set *set_read, fd_set *set_write)
+int dispatch_server(s_client *client, fd_set *set_read, fd_set *set_write)
 {
 	int k = 0;
 	
@@ -790,7 +814,7 @@ void dispatch_server(s_client *client, fd_set *set_read, fd_set *set_write)
 	else if (client->soc.soc != -1 && 
 			FD_ISSET (client->soc.soc, set_write))
 		k = dispatch_server_write(&client->soc, &client->soc_stream, &client->socks, &client->buf, client->conf);
-	if (k < 0){ disconnection(client); }
+	if (k < 0){ if (client->soc.con == 0) { k = -2; } disconnection(client); }
 	
 	/* Dispatch stream socket */
 	if (client->socks.connected == 0 && client->soc_stream.soc != -1){
@@ -827,7 +851,10 @@ void dispatch_server(s_client *client, fd_set *set_read, fd_set *set_write)
  */
 void init_select_server_cli (s_socket *soc,	s_socks *s, s_buffer *buf,
 		s_buffer *buf_stream, int *maxfd,	fd_set *set_read, fd_set *set_write){
-	if ( soc->soc != -1 ){
+	if ( soc->soc != -1 && soc->con == 0 ) {
+		FD_SET(soc->soc, set_write);
+		if (soc->soc > *maxfd) *maxfd = soc->soc;
+	}else if ( soc->soc != -1 ){
 		if ( s->state == S_R_VER ||
 			 s->state == S_R_AUTH ||
 			 s->state == S_R_REQ )
@@ -934,16 +961,19 @@ int init_select_server_reverse (s_client *tc, int *maxfd,
 		/* Open connection to the socks client */
 		for (nc = 0; nc < MAXCLI; nc++) if ( tc[nc].soc.soc == -1 ) break;
 		if (nc >= MAXCLI) return;
-		tc[nc].soc.soc = new_client_socket(tc[nc].conf->config.cli->sockshost,
+		tc[nc].soc.soc = new_client_socket_no(tc[nc].conf->config.cli->sockshost,
 				tc[nc].conf->config.cli->socksport, &tc[nc].soc.adrC,
 				&tc[nc].soc.adrS);
+		tc[nc].soc.con = 0;
 		if ( tc[nc].soc.soc < 0 ){
 			TRACE(L_DEBUG, "client: connection to %s error",
 					tc[nc].conf->config.cli);
 			return -1;
 		}
-		init_select_server_cli(&tc[nc].soc, &tc[nc].socks, &tc[nc].buf,
-				 &tc[nc].stream_buf, maxfd, set_read, set_write);
+		FD_SET(tc[nc].soc.soc, set_write);
+		if (tc[nc].soc.soc > *maxfd) *maxfd = tc[nc].soc.soc;
+		//init_select_server_cli(&tc[nc].soc, &tc[nc].socks, &tc[nc].buf,
+				 //&tc[nc].stream_buf, maxfd, set_read, set_write);
 		cpt++;
 	}
 

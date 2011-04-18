@@ -269,6 +269,8 @@ fin_serveur:
 
 void parse_arg(int argc, char *argv[]){
 	memset(&globalArgs, 0, sizeof(globalArgs));
+	globalArgs.listen = 1088;
+	globalArgs.port = 1080;
 
 	int c;
 	while (1){

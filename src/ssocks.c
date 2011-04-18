@@ -183,6 +183,7 @@ fin_serveur:
 
 void parseArg(int argc, char *argv[]){
 	memset(&globalArgs, 0, sizeof(globalArgs));
+	globalArgs.listen = 1080;
 
 	int c;
 	while (1){

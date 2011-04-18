@@ -10,6 +10,7 @@ Features:
 	- Generate a connection log file
 	- Daemon mode
 	- Server support bind mode
+	- Socks4 support (if authentication is enable socks4 is disable)
 
 ------------------------------------------------------------------------
 TODO:

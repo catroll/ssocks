@@ -248,18 +248,24 @@ void server(int port){
     struct sockaddr_in addrS;
     char methods[2];
     
-    if ( globalArgsServer.fileauth[0] != 0 )
-    	methods[0] = 0x02;
-    else
-    	methods[0] = 0x00;
-
-    char versions[2] = { 0x05, 0x04 };
-    
     s_socks_conf conf;
     s_socks_server_config config;
     conf.config.srv = &config;
 
+    char versions[2] = { 0x05, 0x04 };
     config.allowed_version = versions;
+    config.n_allowed_version = 2;
+
+    if ( globalArgsServer.fileauth[0] != 0 ){
+    	methods[0] = 0x02;
+    	--config.n_allowed_version; /* Disable socks4 don't support auth */
+    }else{
+    	methods[0] = 0x00;
+    }
+    
+
+
+
     config.allowed_method = methods;
     config.n_allowed_method = 1;
     config.check_auth = check_auth;

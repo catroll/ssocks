@@ -49,7 +49,7 @@ void build_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
 int test_version(s_socks *s, s_socks_conf *c, s_buffer *buf);
 
 
-void dispatch_server(s_client *client, fd_set *set_read, fd_set *set_write);
+int dispatch_server(s_client *client, fd_set *set_read, fd_set *set_write);
 
 int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind,
 		s_socks *socks, s_buffer *buf, s_buffer *buf_stream, s_socks_conf *conf);
