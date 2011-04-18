@@ -242,7 +242,7 @@ void capte_sigpipe(){
 }
 void server(int port){
     int soc_ec = -1, maxfd, res, nc;  
-    s_client tc[MAXCLI];  
+    s_client tc[MAXCLI];
     fd_set set_read;
     fd_set set_write;
     struct sockaddr_in addrS;
@@ -253,7 +253,7 @@ void server(int port){
     else
     	methods[0] = 0x00;
 
-    char versions[2] = { 0x05, 0 };
+    char versions[2] = { 0x05, 0x04 };
     
     s_socks_conf conf;
     s_socks_server_config config;
@@ -318,9 +318,9 @@ fin_serveur:
 		ssl_cleaning();
 #endif
     TRACE(L_NOTICE, "server: closing sockets ...");
-    if (soc_ec != -1) close (soc_ec);
     close_log();
     for (nc = 0; nc < MAXCLI; nc++) disconnection(&tc[nc]);
+    if (soc_ec != -1) close (soc_ec);
     if ( globalArgsServer.daemon == 1 )	removePID(PID_FILE);
 }
 
