@@ -75,6 +75,7 @@ void new_connection(int soc_ec, s_client *tc)
     if (nc < MAXCLI) {
     	init_client(&tc[nc], tc[nc].id, tc[nc].socks.mode, tc[nc].conf);
         tc[nc].soc.soc = soc_tmp;
+        tc[nc].soc.con = 1;
         memcpy (&tc[nc].soc.adrC, &adrC_tmp, sizeof(struct sockaddr_in));
         TRACE(L_VERBOSE, "server [%d]: established connection with %s", 
             nc, bor_adrtoa_in(&adrC_tmp));
