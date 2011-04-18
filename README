@@ -30,14 +30,19 @@ Software:
   - ssocksd is the socks5 server
   - ssocks is a socks5 relay, it run a socks server on your localhost interface,
  and relay all data to the server specified in parameter (works but under dev)
-  - rssocks is a reverse socks5 server
-  - rcsocks is a reverse socks5 client
+  - rssocks is a reverse socks5 server ( POC under dev )
+  - rcsocks is a reverse socks5 client ( POC under dev )
+
 File:
   - /etc/ssocksd.conf is server configuration file
   - /etc/ssocksd.auth is password file
   - /var/log/ssocksd.log is default log (specified in configuration file)
   - /var/run/ssocksd.pid is create in daemon mode and delete 
  when it receive SIGTERM
+-----------------------------------------------------------------------
+
+ How to use rssocks and rcsocks in pentest mode
+ http://www.vimeo.com/22515255
 
 ------------------------------------------------------------------------
 More information see man page:
