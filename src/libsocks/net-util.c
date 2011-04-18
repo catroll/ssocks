@@ -57,6 +57,14 @@ int new_socket_tcpip(int port, struct sockaddr_in *addr){
 	return soc;
 }
 
+int build_addr(char ip[4], int port, struct sockaddr_in *addr){
+	struct hostent *hp;
+	addr->sin_family = AF_INET;
+	addr->sin_port = htons(port);
+	memcpy(&addr->sin_addr.s_addr, ip, 4);
+	return 1;
+}
+
 int build_addr_server(char *name, int port, struct sockaddr_in *addr){
 	struct hostent *hp;
 	addr->sin_family = AF_INET;
@@ -102,7 +110,27 @@ int new_listen_socket (int nport, int backlog, struct sockaddr_in *addrS){
     return soc_ec;
 }
 
-int new_client_socket_no(char *nameS, int nport, struct sockaddr_in *addrC,
+int new_client_socket_no_ip(char ip[4], uint16_t nport, struct sockaddr_in *addrC,
+		struct sockaddr_in *addrS){
+	int soc = new_socket_tcpip(0, addrC);
+
+	if ( soc < 0 ){
+		return -1;
+	}
+	set_non_blocking(soc);
+	if ( build_addr(ip, nport, addrS) < 0 ){
+		close(soc);
+		return -1;
+	}
+
+	TRACE(L_VERBOSE, "client: server connection on %s:%d ...",
+			inet_ntoa(addrS->sin_addr), ntohs(addrS->sin_port));
+	connect (soc, (struct sockaddr *) addrS, sizeof(struct sockaddr_in));
+
+	return soc;
+}
+
+int new_client_socket_no(char *nameS, uint16_t nport, struct sockaddr_in *addrC,
 		struct sockaddr_in *addrS){
 	int soc = new_socket_tcpip(0, addrC);
 
@@ -122,7 +150,7 @@ int new_client_socket_no(char *nameS, int nport, struct sockaddr_in *addrC,
 	return soc;
 }
 
-int new_client_socket(char *nameS, int nport,
+int new_client_socket(char *nameS, uint16_t nport,
 		struct sockaddr_in *addrC, struct sockaddr_in *addrS){
 	int soc;
 	/*struct sockaddr_in addrS, addrC;*/
