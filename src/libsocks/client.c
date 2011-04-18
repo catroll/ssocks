@@ -80,7 +80,7 @@ void new_connection(int soc_ec, s_client *tc)
             nc, bor_adrtoa_in(&adrC_tmp));
         
         //append_log_client(&tc[nc], "%s", bor_adrtoa_in(&adrC_tmp));
-		set_non_blocking(tc[nc].soc);
+		set_non_blocking(tc[nc].soc.soc);
     } else {
         close (soc_tmp);
         ERROR (L_NOTICE, "server: %s connection refused : too many clients!", 
