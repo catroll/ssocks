@@ -65,6 +65,7 @@ void init_socket(s_socket *s){
 	s->con = 0;
 #ifdef HAVE_LIBSSL
 	s->ssl= NULL;
+	s->want_ssl= -1;
 #endif
 }
 

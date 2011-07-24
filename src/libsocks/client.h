@@ -51,7 +51,7 @@ typedef struct{
 
 void init_client (s_client *c, int id, int mode, s_socks_conf *conf);
 void disconnection(s_client *c);
-void new_connection(int soc_ec, s_client *tc, int ssl);
+int new_connection(int soc_ec, s_client *tc, int ssl);
 
 
 

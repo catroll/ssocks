@@ -59,14 +59,14 @@ void disconnection(s_client *c)
 	init_client(c, c->id, c->socks.mode, c->conf);
 }
 
-void new_connection(int soc_ec, s_client *tc, int ssl)
+int new_connection(int soc_ec, s_client *tc, int ssl)
 {
     int nc, soc_tmp;
     struct sockaddr_in adrC_tmp;
 
     TRACE(L_DEBUG, "server: connection in progress ...");
     soc_tmp = bor_accept_in (soc_ec, &adrC_tmp);
-    if (soc_tmp < 0) { return; }
+    if (soc_tmp < 0) { return -1; }
 
     /* Search free space in tc[].soc */
     for (nc = 0; nc < MAXCLI; nc++)
@@ -81,28 +81,29 @@ void new_connection(int soc_ec, s_client *tc, int ssl)
             nc, bor_adrtoa_in(&adrC_tmp));
 
 #ifdef HAVE_LIBSSL
-	/* Init SSL here
-	 */
-	if ( ssl == 1 ){
-		TRACE(L_DEBUG, "server [%d]: socks5 enable ssl  ...", nc);
-		tc[nc].soc.ssl = ssl_neogiciate_server(tc[nc].soc.soc);
-		if ( tc[nc].soc.ssl == NULL ){
-			ERROR(L_VERBOSE, "server [%d]: ssl error", nc);
-			disconnection(&tc[nc]);
-			return;
+		/* Init SSL here
+		 */
+		if ( ssl == 1 ){
+			TRACE(L_DEBUG, "server [%d]: socks5 enable ssl  ...", nc);
+			tc[nc].soc.ssl = ssl_neogiciate_server(tc[nc].soc.soc);
+			if ( tc[nc].soc.ssl == NULL ){
+				ERROR(L_VERBOSE, "server [%d]: ssl error", nc);
+				disconnection(&tc[nc]);
+				return -1;
+			}
+			TRACE(L_DEBUG, "server [%d]: ssl ok.", nc);
+			set_non_blocking(tc[nc].soc.soc);
 		}
-		TRACE(L_DEBUG, "server [%d]: ssl ok.", nc);
-		set_non_blocking(tc[nc].soc.soc);
-	}
 #endif /* HAVE_LIBSSL */
 
-
+		return nc;
         //append_log_client(&tc[nc], "%s", bor_adrtoa_in(&adrC_tmp));
 		//set_non_blocking(tc[nc].soc.soc);
     } else {
         close (soc_tmp);
         ERROR (L_NOTICE, "server: %s connection refused : too many clients!",
             bor_adrtoa_in(&adrC_tmp));
+        return -1;
     }
 }
 

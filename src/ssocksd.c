@@ -219,9 +219,11 @@ void parseArg(int argc, char *argv[]){
 		SSL_library_init();        /* initialize library */
 		if ( globalArgsServer.filecert[0] == 0 ){
 			ERROR(L_NOTICE, "server: need a certificate file to use ssl");
+			exit(1);
 		}
 		if ( globalArgsServer.filekey[0] == 0 ){
 			ERROR(L_NOTICE, "server: need a private key file to use ssl");
+			exit(1);
 		}
 		if ( ssl_init_server(globalArgsServer.filecert,
 				globalArgsServer.filekey, SSL_FILETYPE_PEM) != 0){

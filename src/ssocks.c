@@ -157,8 +157,11 @@ void server_relay(char *sockshost, int socksport, int port,
         res = select (maxfd+1, &set_read, &set_write, NULL, NULL);
 
         if (res > 0) {  /* Search eligible sockets */
-            if (FD_ISSET (soc_ec, &set_read))
-                new_connection (soc_ec, tc, ssl);
+            if (FD_ISSET (soc_ec, &set_read)){
+                nc = new_connection (soc_ec, tc, 0);
+                if ( ssl == 1 )
+					tc[nc].soc_stream.want_ssl = 1;
+			}
 
             for (nc = 0; nc < MAXCLI; nc++){
             	dispatch_dynamic(&tc[nc], &set_read, &set_write);
@@ -173,13 +176,15 @@ void server_relay(char *sockshost, int socksport, int port,
     }
 
 fin_serveur:
+
+    printf ("Server: closing sockets ...\n");
+    if (soc_ec != -1) close (soc_ec);
+    for (nc = 0; nc < MAXCLI; nc++) disconnection(&tc[nc]);
+
 #ifdef HAVE_LIBSSL
 	if (ssl == 1)
 		ssl_cleaning();
 #endif
-    printf ("Server: closing sockets ...\n");
-    if (soc_ec != -1) close (soc_ec);
-    for (nc = 0; nc < MAXCLI; nc++) disconnection(&tc[nc]);
 }
 
 

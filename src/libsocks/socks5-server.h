@@ -1,19 +1,19 @@
 /*
  *      socks5-server.h
- *      
+ *
  *      Created on: 2011-04-11
  *      Author:     Hugo Caron
  *      Email:      <h.caron@codsec.com>
- * 
+ *
  * Copyright (C) 2011 by Hugo Caron
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  *
@@ -35,13 +35,13 @@
 
 int build_request_accept_bind(s_socks *s, s_socks_conf *c,
 		s_socket *stream, s_socket *bind, s_buffer *buf);
-void build_request_ack(s_socks *s, s_socks_conf *c, 
+void build_request_ack(s_socks *s, s_socks_conf *c,
 		s_socket *stream, s_socket *bind, s_buffer *buf);
-		
+
 int test_request_dynamic(s_socks *s, s_socks_conf *c, s_buffer *buf);
 int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 		s_socks_conf *c, s_buffer *buf);
-		
+
 void build_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
 int test_auth(s_socks *s, s_socks_conf *c, s_buffer *buf);
 
@@ -72,7 +72,7 @@ void init_select_server (int soc_ec, s_client *tc, int *maxfd,
 		fd_set *set_read, fd_set *set_write);
 
 int init_select_server_reverse (s_client *tc, int *maxfd,
-		int ncon, fd_set *set_read, fd_set *set_write);
+		int ncon, fd_set *set_read, fd_set *set_write, int ssl);
 
 #endif /* SOCKS5_SERVER__H */
 

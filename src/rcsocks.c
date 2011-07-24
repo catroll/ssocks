@@ -48,8 +48,9 @@ struct globalArgs_t {
 	unsigned int background;// -b
 
 #ifdef HAVE_LIBSSL
-	unsigned int ssl;		// -k option
-	char *certfile;			// -c option
+	unsigned int ssl;		// -s option
+	char *filecert;			// -c option
+	char *filekey;			// -k option
 #endif
 
 	char *uname;			// -u option
@@ -81,7 +82,9 @@ void usage(char *name){
 	printf("\t--listen {port} where rssocks connect back\n");
 	printf("\t--port {port} the socks5 port you want\n");
 #ifdef HAVE_LIBSSL
+	printf("\t--ssl      enable secure socks5 protocol\n");
 	printf("\t--cert  {certfile.crt} Certificate of dst server (enable SSL)\n");
+	printf("\t--key  {file.pem}    set server private key\n");
 #endif
 	printf("\t--background\n");
 	printf("\n");
@@ -97,7 +100,7 @@ void new_connection_reverse (int soc_ec, s_client *tc, s_socket *socks_pool)
     int nc, nc2, soc_tmp;
     struct sockaddr_in adrC_tmp;
 
-    TRACE(L_DEBUG, "server: connection in progress ...");
+    TRACE(L_DEBUG, "server: connection in progress (reverse) ...");
     soc_tmp = bor_accept_in (soc_ec, &adrC_tmp);
     if (soc_tmp < 0) { return; }
 
@@ -134,12 +137,12 @@ void new_connection_reverse (int soc_ec, s_client *tc, s_socket *socks_pool)
 
 }
 
-void new_connection_socket(int soc_ec, s_socket *tc)
+void new_connection_socket(int soc_ec, s_socket *tc, int ssl)
 {
     int nc, soc_tmp;
     struct sockaddr_in adrC_tmp;
 
-    TRACE(L_DEBUG, "server: connection server in progress ...");
+    TRACE(L_DEBUG, "server: connection server in progress (socket) ...");
     soc_tmp = bor_accept_in (soc_ec, &adrC_tmp);
     if (soc_tmp < 0) { return; }
 
@@ -149,10 +152,27 @@ void new_connection_socket(int soc_ec, s_socket *tc)
 
     if (nc < MAXCLI) {
     	init_socket(&tc[nc]);
+
         tc[nc].soc = soc_tmp;
         memcpy (&tc[nc].adrC, &adrC_tmp, sizeof(struct sockaddr_in));
         TRACE(L_VERBOSE, "server [%d]: established server connection with %s",
             nc, bor_adrtoa_in(&adrC_tmp));
+
+#ifdef HAVE_LIBSSL
+		/* Init SSL here
+		 */
+		if ( ssl == 1 ){
+			TRACE(L_DEBUG, "server [%d]: socks5 enable ssl  ...", nc);
+			tc[nc].ssl = ssl_neogiciate_server(tc[nc].soc);
+			if ( tc[nc].ssl == NULL ){
+				ERROR(L_VERBOSE, "server [%d]: ssl error", nc);
+				close_socket(&tc[nc]);
+				return;
+			}
+			TRACE(L_DEBUG, "server [%d]: ssl ok.", nc);
+			set_non_blocking(tc[nc].soc);
+		}
+#endif /* HAVE_LIBSSL */
 
         //append_log_client(&tc[nc], "%s", bor_adrtoa_in(&adrC_tmp));
 		//set_non_blocking(tc[nc].soc);
@@ -239,7 +259,7 @@ void server_relay(int port, int listen, int ssl){
         if (res > 0) {  /* Search eligible sockets */
 
             if (FD_ISSET (soc_ec, &set_read))
-               new_connection_socket (soc_ec, socks_pool);
+               new_connection_socket (soc_ec, socks_pool, ssl);
 
             if (FD_ISSET (soc_ec_cli, &set_read))
                 new_connection_reverse (soc_ec_cli, tc, socks_pool);
@@ -281,7 +301,9 @@ void parse_arg(int argc, char *argv[]){
 			{"listen",  required_argument, 0, 'l'},
 			{"port",  required_argument, 0, 'p'},
 #ifdef HAVE_LIBSSL
-			{"cert",      required_argument, 0, 'c'},
+			{"ssl",  no_argument,       0, 's'},
+			{"cert", required_argument, 0, 'c'},
+			{"key",  required_argument, 0, 'k'},
 #endif
 			{0, 0, 0, 0}
 		};
@@ -289,7 +311,7 @@ void parse_arg(int argc, char *argv[]){
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
-		c = getopt_long (argc, argv, "h?bvc:p:l:",
+		c = getopt_long (argc, argv, "h?bvk:sc:p:l:",
 					long_options, &option_index);
 
 		/* Detect the end of the options. */
@@ -313,13 +335,15 @@ void parse_arg(int argc, char *argv[]){
 				break;
 
 #ifdef HAVE_LIBSSL
-			case 'c':
+			case 's':
 				globalArgs.ssl = 1;
-				globalArgs.certfile = optarg;
 				break;
-			/*case 'k':
-				lobalArgs.ssl = 1;
-				break;*/
+			case 'c':
+				globalArgs.filecert = strdup(optarg);
+				break;
+			case 'k':
+				globalArgs.filekey = strdup(optarg);
+				break;
 #endif
 
 			case 'b':
@@ -353,21 +377,22 @@ void parse_arg(int argc, char *argv[]){
 	}
 
 #ifdef HAVE_LIBSSL
-	/*Initialize ssl with the CA certificate file
-	 */
-	if (globalArgs.certfile != NULL){
+	if (globalArgs.ssl == 1){
 		SSL_load_error_strings();  /* readable error messages */
 		SSL_library_init();        /* initialize library */
-		TRACE(L_VERBOSE, "client: init ssl ...");
-		if (globalArgs.certfile == NULL){
-			ERROR(L_NOTICE, "client: actually need CA certificate file");
+		if ( globalArgs.filecert[0] == 0 ){
+			ERROR(L_NOTICE, "server: need a certificate file to use ssl");
 			exit(1);
 		}
-		if ( ssl_init_client(globalArgs.certfile) != 0){
-			ERROR(L_NOTICE, "client: ssl config error");
+		if ( globalArgs.filekey[0] == 0 ){
+			ERROR(L_NOTICE, "server: need a private key file to use ssl");
 			exit(1);
 		}
-		TRACE(L_VERBOSE, "client: ssl ok.");
+		if ( ssl_init_server(globalArgs.filecert,
+				globalArgs.filekey, SSL_FILETYPE_PEM) != 0){
+			ERROR(L_NOTICE, "server: ssl configuration error");
+			exit(1);
+		}
 	}
 #endif
 }

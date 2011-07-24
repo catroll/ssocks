@@ -38,6 +38,26 @@
 #include <config.h>
 #include <getopt.h>
 
+
+struct globalArgs_t {
+	char *host;				// -h option
+	unsigned int port;		// -p option
+	unsigned int listen;	// -l option
+	unsigned int verbosity;	// -v
+
+#ifdef HAVE_LIBSSL
+	unsigned int ssl;		// -k option
+	char *certfile;			// -c option
+#endif
+
+	char *uname;			// -u option
+	char *passwd;			// -p option
+
+	char *sockshost;		// -s host:port
+	int socksport;
+
+} globalArgs;
+
 int boucle_princ = 1;
 void capte_fin (int sig){
     TRACE(L_VERBOSE, "client: signal %d caught\n", sig);
@@ -153,31 +173,18 @@ void netcat_socks(char *sockshost, int socksport,
 	TRACE(L_VERBOSE, "client: close socket ...");
 
 #ifdef HAVE_LIBSSL
-	if(s.ssl != NULL) ssl_close(s.ssl);
+	if(s.ssl != NULL){
+		ssl_close(s.ssl);
+	}
+	if(globalArgs.ssl == 1){
+		ssl_cleaning();
+	}
 #endif /* HAVE_LIBSSL */
 	close(s.soc);
-	ssl_cleaning();
+
 
 }
 
-struct globalArgs_t {
-	char *host;				// -h option
-	unsigned int port;		// -p option
-	unsigned int listen;	// -l option
-	unsigned int verbosity;	// -v
-
-#ifdef HAVE_LIBSSL
-	unsigned int ssl;		// -k option
-	char *certfile;			// -c option
-#endif
-
-	char *uname;			// -u option
-	char *passwd;			// -p option
-
-	char *sockshost;		// -s host:port
-	int socksport;
-
-} globalArgs;
 
 void usage(char *name){
 	printf("nsocks v%s ( Netcat like with Socks5 support )\n", PACKAGE_VERSION);

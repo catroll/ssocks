@@ -143,7 +143,8 @@ void reverse_server(char *sockshost, int socksport,
     bor_signal (SIGINT, capte_fin, SA_RESTART);
 
     while (boucle_princ) {
-        k = init_select_server_reverse(tc, &maxfd, ncon, &set_read, &set_write);
+        k = init_select_server_reverse(tc, &maxfd, ncon,
+			&set_read, &set_write, ssl);
         if ( k < 0 ){ goto fin_serveur; }
         res = select (maxfd+1, &set_read, &set_write, NULL, NULL);
 

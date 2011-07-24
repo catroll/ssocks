@@ -100,6 +100,7 @@ typedef struct {
 	int con;  /* Connected flag to used with non blocking connect */
 #ifdef HAVE_LIBSSL
 	SSL *ssl; /* SSL socket */
+	int want_ssl; /* Trick for dynamic mode to know you need ssl*/
 #endif
 	struct sockaddr_in adrS; /* Socket server info */
 	struct sockaddr_in adrC; /* Socket client info */

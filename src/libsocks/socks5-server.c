@@ -768,6 +768,20 @@ int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind
 					/* close_socket(soc); */
 				}
 
+#ifdef HAVE_LIBSSL
+				/* Init SSL here
+				 */
+				if (soc_stream->want_ssl == 1){
+					TRACE(L_DEBUG, "client: socks5 enable ssl ...");
+					soc_stream->ssl = ssl_neogiciate_client(soc_stream->soc);
+					if ( soc_stream->ssl == NULL ){
+						ERROR(L_VERBOSE, "client: ssl error");
+						return -3;
+					}
+					TRACE(L_DEBUG, "client: ssl ok.");
+				}
+#endif /* HAVE_LIBSSL */
+
 				socks->state = S_WAIT;
 				break;
 			}
@@ -926,7 +940,7 @@ void init_select_server (int soc_ec, s_client *tc, int *maxfd,
 }
 
 int init_select_server_reverse (s_client *tc, int *maxfd,
-		int ncon, fd_set *set_read, fd_set *set_write)
+		int ncon, fd_set *set_read, fd_set *set_write, int ssl)
 {
 	/* Security to avoid segmentation fault on tc tab */
 	if ( ncon >= MAXCLI ) ncon = MAXCLI-1;
@@ -961,7 +975,8 @@ int init_select_server_reverse (s_client *tc, int *maxfd,
 		/* Open connection to the socks client */
 		for (nc = 0; nc < MAXCLI; nc++) if ( tc[nc].soc.soc == -1 ) break;
 		if (nc >= MAXCLI) return;
-		tc[nc].soc.soc = new_client_socket_no(tc[nc].conf->config.cli->sockshost,
+		/* Remove nonblockant for ssl */
+		tc[nc].soc.soc = new_client_socket(tc[nc].conf->config.cli->sockshost,
 				tc[nc].conf->config.cli->socksport, &tc[nc].soc.adrC,
 				&tc[nc].soc.adrS);
 		tc[nc].soc.con = 0;
@@ -970,6 +985,23 @@ int init_select_server_reverse (s_client *tc, int *maxfd,
 					tc[nc].conf->config.cli);
 			return -1;
 		}
+		tc[nc].soc.con = 1; /* We block so ok */
+#ifdef HAVE_LIBSSL
+		/* Init SSL here
+		 */
+		if (ssl == 1){
+			TRACE(L_DEBUG, "client: socks5 enable ssl ...");
+			tc[nc].soc.ssl = ssl_neogiciate_client(tc[nc].soc.soc);
+			if ( tc[nc].soc.ssl == NULL ){
+				ERROR(L_VERBOSE, "client: ssl error");
+				return -2;
+			}
+			TRACE(L_DEBUG, "client: ssl ok.");
+		}
+#endif /* HAVE_LIBSSL */
+
+		set_non_blocking(tc[nc].soc.soc);
+
 		FD_SET(tc[nc].soc.soc, set_write);
 		if (tc[nc].soc.soc > *maxfd) *maxfd = tc[nc].soc.soc;
 		//init_select_server_cli(&tc[nc].soc, &tc[nc].socks, &tc[nc].buf,
