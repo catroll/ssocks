@@ -309,7 +309,7 @@ int main (int argc, char *argv[]){
 	reverse_server(globalArgs.sockshost, globalArgs.socksport,
 			globalArgs.uname, globalArgs.passwd,
 #ifdef HAVE_LIBSSL
-			globalArgs.ssl
+			globalArgs.ssl,
 #else
 			0,
 #endif

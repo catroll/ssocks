@@ -101,8 +101,7 @@ int ssl_init_server(char *certfile, char *privkeyfile, int type){
 
 	/* Load the server certificate into the SSL_CTX structure */
 	TRACE(L_VERBOSE, "server-ssl: load the server certificate");
-	if (SSL_CTX_use_certificate_file(ctx, certfile, type)
-			<= 0) {
+	if (SSL_CTX_use_certificate_file(ctx, certfile, type) <= 0) {
 		ERR_print_errors_fp( stderr);
 		return -1;
 	}
@@ -139,8 +138,10 @@ SSL *ssl_neogiciate_client(int soc){
 	SSL_set_fd(ssl, soc);
 
 	/* Perform SSL Handshake on the SSL server */
-	if ( SSL_connect(ssl) != 1){
-		ERR_print_errors_fp(stderr);
+	int r = SSL_connect(ssl);
+	if ( r != 1){
+		ERROR(L_VERBOSE, "client-ssl: sucks %d", SSL_get_error(ssl, r));
+		ERR_print_errors_fp(stdout);
 		if ( SSL_shutdown(ssl) != 1 ){
 			ERR_print_errors_fp(stderr);
 		}
@@ -163,7 +164,9 @@ SSL *ssl_neogiciate_server(int soc){
 	SSL_set_fd(ssl, soc);
 
 	/* Perform SSL Handshake on the SSL server */
-	if ( SSL_accept(ssl) != 1){
+	int r = SSL_accept(ssl);
+	if ( r != 1){
+		ERROR(L_NOTICE, "server-ssl: sucks %d", SSL_get_error(ssl, r));
 		ERR_print_errors_fp(stderr);
 		if ( SSL_shutdown(ssl) != 1 ){
 			ERR_print_errors_fp(stderr);

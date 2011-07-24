@@ -1,19 +1,19 @@
 /*
  *      socks5-client.h
- *      
+ *
  *      Created on: 2011-04-11
  *      Author:     Hugo Caron
  *      Email:      <h.caron@codsec.com>
- * 
+ *
  * Copyright (C) 2011 by Hugo Caron
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  *
@@ -30,7 +30,7 @@
 
 void build_version(s_socks *s, s_socks_conf *c, s_buffer *buf);
 int test_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
-		
+
 int build_auth(s_socks *s, s_socks_conf *c, s_buffer *buf);
 int test_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf);
 
@@ -57,4 +57,4 @@ int new_socket_with_socks(s_socket *s,
 		char *sockshost, int socksport,
 		char *username, char *password,
 		char *host, int port, int listen,
-		int version, int cmd);
+		int version, int ssl, int cmd);

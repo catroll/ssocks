@@ -1,19 +1,19 @@
 /*
  *      socks5-server.c
- *      
+ *
  *      Created on: 2011-04-11
  *      Author:     Hugo Caron
  *      Email:      <h.caron@codsec.com>
- * 
+ *
  * Copyright (C) 2011 by Hugo Caron
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  *
@@ -46,6 +46,7 @@
  * Return:
  * 	-1, error wrong version
  * 	-2, error wrong method
+ *  -3, error ssl
  * 	 0, success
  *
  * From RFC1928:
@@ -69,9 +70,9 @@
 int test_version(s_socks *s, s_socks_conf *c, s_buffer *buf){
 	int i, j;
 	Socks5Version req;
-	TRACE(L_DEBUG, "server [%d]: testing version ...", 
+	TRACE(L_DEBUG, "server [%d]: testing version ...",
 		s->id);
-	
+
 	memcpy(&req, buf->data, sizeof(Socks5Version));
 
 	/* Testing version */
@@ -99,11 +100,11 @@ int test_version(s_socks *s, s_socks_conf *c, s_buffer *buf){
 
 	/* If too much method we truncate */
 	if (sizeof(req.methods) < (unsigned int)req.nmethods){
-		ERROR(L_VERBOSE, "server [%d]: truncate methods", 
+		ERROR(L_VERBOSE, "server [%d]: truncate methods",
 			s->id);
 		req.nmethods = sizeof(req.methods);
 	}
-	
+
 	/* Show only in debug mode */
 	if ( L_DEBUG <= verbosity ){
 		printf("server [%d]: methods ", s->id);
@@ -123,9 +124,7 @@ int test_version(s_socks *s, s_socks_conf *c, s_buffer *buf){
 	if ( L_DEBUG <= verbosity ){
 		printf("\n");
 	}
-	
 
-	
 	/* Searching valid methods:
 	 * Methods 0x00, no authentication
 	 *         0x01, GSSAPI no supported
@@ -137,16 +136,16 @@ int test_version(s_socks *s, s_socks_conf *c, s_buffer *buf){
 				s->method = c->config.srv->allowed_method[j];
 				break;
 			}
-		}		
+		}
 	}
-	
+
 	/* No valid method find */
 	if ( s->method == -1 ){
-		ERROR(L_VERBOSE, "server [%d]: method not supported", 
-			s->id);	
-		return -2;	
+		ERROR(L_VERBOSE, "server [%d]: method not supported",
+			s->id);
+		return -2;
 	}
-	
+
 	return 0;
 }
 
@@ -168,10 +167,10 @@ void build_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	init_buffer(buf);
 	res.ver = s->version;
 	res.method = s->method;
-	
+
 	/* Copy in buffer for send */
 	memcpy(buf->data, &res, sizeof(Socks5VersionACK));
-	
+
 	/* Reset counter and fix b flag */
 	buf->a = 0;
 	buf->b = sizeof(Socks5VersionACK);
@@ -201,10 +200,10 @@ void build_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 int test_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 {
 	Socks5Auth req;
-	
-	TRACE(L_DEBUG, "server [%d]: testing authentication ...", 
+
+	TRACE(L_DEBUG, "server [%d]: testing authentication ...",
 		s->id);
-	
+
 	/* Rebuild the packet in Socks5Auth struct */
 	memcpy(&req, buf->data, 2);
 	memcpy(&req.plen, buf->data + 2 + (int)req.ulen , 2);
@@ -212,12 +211,12 @@ int test_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	/* Check username and password length truncate if too long
 	 * RFC tell us max length 255 */
 	if ( (unsigned int)req.ulen > sizeof(req.uname)-1){
-		ERROR(L_NOTICE, "server [%d]: username too long", 
+		ERROR(L_NOTICE, "server [%d]: username too long",
 			s->id);
 		req.ulen = sizeof(req.uname)-1;
 	}
 	if ( (unsigned int)req.plen > sizeof(req.passwd)-1){
-		ERROR(L_NOTICE, "server [%d]: password  too long", 
+		ERROR(L_NOTICE, "server [%d]: password  too long",
 			s->id);
 		req.plen = sizeof(req.passwd)-1;
 	}
@@ -231,10 +230,10 @@ int test_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	*(req.passwd + req.plen) = '\0';
 	//DUMP(buf->data, buf->b);
 	TRACE(L_VERBOSE, "server [%d]: authentication attempt "\
-						"v0x%02X (%d,%d) %s:%s", 
-		s->id, 
+						"v0x%02X (%d,%d) %s:%s",
+		s->id,
 		req.ver, req.ulen, req.plen, req.uname, req.passwd);
-	
+
 	/* Test version need 0x01 RFC */
 	if ( req.ver != 0x01 ){
 		ERROR(L_NOTICE, "server [%d]: wrong subnegotiation version need to be 0x01",
@@ -249,17 +248,17 @@ int test_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 		return -2;
 	}
 	if ( (*c->config.srv->check_auth)(req.uname, req.passwd) == 1 ){
-		TRACE(L_VERBOSE, "server [%d]: authentication OK!", 
+		TRACE(L_VERBOSE, "server [%d]: authentication OK!",
 			s->id);
 		strcpy(s->uname, req.uname);
 		s->auth = 1;
 	}else{
-		ERROR(L_VERBOSE, "server [%d]: authentication NOK!", 
+		ERROR(L_VERBOSE, "server [%d]: authentication NOK!",
 			s->id);
 		s->auth = 0;
 	}
-	
-	return 0;	
+
+	return 0;
 }
 
 /* Build authentication packet ack in buf
@@ -288,10 +287,10 @@ void build_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	init_buffer(buf);
 	res.ver = 0x01;
 	res.status = (s->auth) ? 0x00 : 0xFF; /* 0x00 == win! */
-	
+
 	/* Copy in buffer for send */
 	memcpy(buf->data, &res, sizeof(Socks5VersionACK));
-	
+
 	/* Reset counter and fix b flag */
 	buf->a = 0;
 	buf->b = sizeof(Socks5VersionACK);
@@ -334,7 +333,7 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 		s_socks_conf *c, s_buffer *buf)
 {
 	Socks5Req req;
-	TRACE(L_DEBUG, "server [%d]: testing client request ...", 
+	TRACE(L_DEBUG, "server [%d]: testing client request ...",
 		s->id);
 
 	uint16_t port = 0, *p;
@@ -345,13 +344,13 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 	/* Rebuild the packet but don't extract
 	 * DST.ADDR and DST.PORT in Socks5Req struct */
 	memcpy(&req, buf->data, sizeof(Socks5Req));
-	TRACE(L_DEBUG, "server [%d]: v0x%x, cmd 0x%x, rsv 0x%x, atyp 0x%x", 
+	TRACE(L_DEBUG, "server [%d]: v0x%x, cmd 0x%x, rsv 0x%x, atyp 0x%x",
 		s->id, req.ver,
 		req.cmd, req.rsv, req.atyp);
-	
+
 	/* Save the request cmd */
 	s->cmd = req.cmd;
-	
+
 	/* Check ATYP
 	 * ATYP address type of following address
 	 *    -  IP V4 address: X'01'
@@ -368,7 +367,7 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 			strncpy(domain, buf->data + sizeof(Socks5Req) + 1,
 					( l < sizeof(domain) ) ? l : sizeof(domain)-1 );
 			domain[(int)l] = 0;
-			
+
 			/* After domain we have the port
 			 * big endian on 2 bytes*/
 			p = (uint16_t*)(buf->data + sizeof(Socks5Req) + l  + 1) ;
@@ -378,10 +377,10 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 			break;
 
 		case 0x01: /* IP address */
-			memcpy(&chAddr, (buf->data + sizeof(Socks5Req)), 
+			memcpy(&chAddr, (buf->data + sizeof(Socks5Req)),
 					sizeof(chAddr));
 			inet_aton(chAddr, &addr);
-				
+
 			/* After domain we have the port
 			 * big endian on 2 bytes*/
 			p = (uint16_t*)(buf->data + sizeof(Socks5Req) + 4  ) ;
@@ -391,11 +390,11 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 		/* TODO: ipv6 support */
 		default:
 			ERROR(L_NOTICE, "server [%d]: support domain name "\
-								"and ipv4 only", 
+								"and ipv4 only",
 				s->id);
 			return -1;
 	}
-	
+
 
 
 	/* CMD:
@@ -426,11 +425,11 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 			break;
 		/* TODO: udp support */
 		default :
-			ERROR(L_NOTICE, "server [%d]: don't support udp", 
+			ERROR(L_NOTICE, "server [%d]: don't support udp",
 				s->id);
 			return -2;
 	}
-	
+
 	return 0;
 }
 
@@ -473,19 +472,19 @@ int test_request_dynamic(s_socks *s, s_socks_conf *c, s_buffer *buf)
  *
  * TODO: Handle server request error, in case of fails send 0X01
  */
-void build_request_ack(s_socks *s, s_socks_conf *c, 
+void build_request_ack(s_socks *s, s_socks_conf *c,
 		s_socket *stream, s_socket *bind, s_buffer *buf)
 {
-	
+
 	Socks5ReqACK res;
 	int k;
 	socklen_t socklen = sizeof(int);
 	res.ver = s->version;
 	res.rsv = 0;
 	res.atyp = 0x01;
-	
+
 	init_buffer(buf);
-	
+
 	switch(s->cmd){
 		case 0x01:
 			/* 0x00 succeeded, 0x01 general SOCKS failure ... */
@@ -525,7 +524,7 @@ void build_request_ack(s_socks *s, s_socks_conf *c,
 			memcpy(&res.bndport, &stream->adrC.sin_port,
 					sizeof(stream->adrC.sin_port));
 			break;
-			
+
 		case 0x02:
 			/* In the reply to a BIND, two replies are sent from the SOCKS server
 			 * to the client during a BIND operation. */
@@ -553,18 +552,18 @@ void build_request_ack(s_socks *s, s_socks_conf *c,
 			}else{
 				res.rep = 0x01;
 			}
-			
+
 
 			break;
-			
+
 		default:
 			res.rep = 0x01;
 			break;
 	}
-	
+
 	/* Copy in buffer for send */
 	memcpy(buf->data, &res, sizeof(Socks5ReqACK));
-	
+
 	/* Reset counter and fix b flag */
 	buf->a = 0;
 	buf->b = sizeof(Socks5ReqACK);
@@ -583,8 +582,8 @@ int build_request_accept_bind(s_socks *s, s_socks_conf *c,
 		s_socket *stream, s_socket *bind, s_buffer *buf)
 {
 	init_buffer(buf);
-	
-	TRACE(L_VERBOSE, "server [%d]: build binding packet ...", 
+
+	TRACE(L_VERBOSE, "server [%d]: build binding packet ...",
 		s->id);
 
 	stream->soc  = bor_accept_in (bind->soc, &stream->adrC);
@@ -592,14 +591,14 @@ int build_request_accept_bind(s_socks *s, s_socks_conf *c,
 		s->connected = -1; /* Send a error request ack */
 		return -1;
 	}
-	
+
 	s->connected = 1;
-	
-	TRACE(L_DEBUG, "server: established connection with %s", 
+
+	TRACE(L_DEBUG, "server: established connection with %s",
 		bor_adrtoa_in(&stream->adrC));
-	
+
 	build_request_ack(s, c, stream, bind, buf);
-	
+
 	return 0;
 }
 
@@ -620,21 +619,21 @@ int dispatch_server_write(s_socket *soc, s_socket *soc_stream, s_socks *socks,
 		if ( getsockopt(soc->soc, SOL_SOCKET, SO_ERROR, &k, &socklen) < 0){
 			perror("getsockopt");
 			k = -1;
-			return;
+			return k;
 		}
 
 		if (k != 0){
-			ERROR(L_VERBOSE, "client: error %d", k);
+			ERROR(L_VERBOSE, "server [%d]: error %d", socks->id, k);
 			k = -1;
-			return;
+			return k;
 		}
 
 		/* Recovering the client address and port after the connection*/
 		if ( bor_getsockname_in(soc->soc, &soc->adrC) < 0 ){
 			k = -1;
-			return;
+			return k;
 		}
-		TRACE(L_VERBOSE, "server [%d] : server connection on %s OK",socks->id,
+		TRACE(L_VERBOSE, "server [%d]: server connection on %s OK",socks->id,
 			bor_adrtoa_in(&soc->adrS));
 		soc->con = 1;
 		return;
@@ -733,6 +732,7 @@ int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind
 				socks->state = S_WAIT;
 				break;
 			}
+
 			build_version_ack(socks, conf,
 								buf);
 
@@ -805,17 +805,17 @@ int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind
 int dispatch_server(s_client *client, fd_set *set_read, fd_set *set_write)
 {
 	int k = 0;
-	
+
 	/* Dispatch server socket */
 	if (client->soc.soc != -1 && FD_ISSET (client->soc.soc, set_read))
 		k = dispatch_server_read(&client->soc, &client->soc_stream, &client->soc_bind,
 				&client->socks, &client->buf, &client->stream_buf, client->conf);
 
-	else if (client->soc.soc != -1 && 
+	else if (client->soc.soc != -1 &&
 			FD_ISSET (client->soc.soc, set_write))
 		k = dispatch_server_write(&client->soc, &client->soc_stream, &client->socks, &client->buf, client->conf);
 	if (k < 0){ if (client->soc.con == 0) { k = -2; } disconnection(client); }
-	
+
 	/* Dispatch stream socket */
 	if (client->socks.connected == 0 && client->soc_stream.soc != -1){
 		if (FD_ISSET (client->soc_stream.soc, set_write)){
@@ -824,21 +824,21 @@ int dispatch_server(s_client *client, fd_set *set_read, fd_set *set_write)
 	}else if (client->soc_stream.soc != -1
 			&& FD_ISSET (client->soc_stream.soc, set_read)){
 		if ( buf_free(&client->buf) > 0 ){
-			k = read_socks(&client->soc_stream, &client->buf, 0); 
+			k = read_socks(&client->soc_stream, &client->buf, 0);
 			if (k < 0){ disconnection(client); } /* Error */
 		}
 
-	}else if (client->soc_stream.soc != -1 
+	}else if (client->soc_stream.soc != -1
 			&& FD_ISSET (client->soc_stream.soc, set_write)){
-		
+
 			k = write_socks(&client->soc_stream, &client->stream_buf);
-			if (k < 0){ disconnection(client); } /* Error */ 
+			if (k < 0){ disconnection(client); } /* Error */
 			init_buffer(&client->stream_buf);
 	}
-		
+
 	if (client->soc_bind.soc != -1 &&
 			FD_ISSET (client->soc_bind.soc, set_read)){
-		if ( build_request_accept_bind(&client->socks, client->conf, 
+		if ( build_request_accept_bind(&client->socks, client->conf,
 				&client->soc_stream, &client->soc_bind, &client->buf) == 0 ){
 			client->socks.state = S_W_REQ_ACK;
 		}
@@ -910,14 +910,14 @@ void init_select_server (int soc_ec, s_client *tc, int *maxfd,
     *maxfd = soc_ec;
     for (nc = 0; nc < MAXCLI; nc++){
 		s_client *client = &tc[nc];
-		
+
 		init_select_server_cli(&client->soc, &client->socks, &client->buf, &client->stream_buf,
 				maxfd, set_read, set_write);
 
 		init_select_server_stream(&client->soc_stream, &client->socks, &client->stream_buf, &client->buf,
 				maxfd, set_read, set_write);
 
-		
+
 		if ( client->soc_bind.soc != -1 ){
 			FD_SET(client->soc_bind.soc, set_read);
 			if (client->soc_bind.soc > *maxfd) *maxfd = client->soc_bind.soc;

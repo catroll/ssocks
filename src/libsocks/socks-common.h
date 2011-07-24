@@ -44,7 +44,6 @@
 
 #define SOCKS4_V 0x04
 #define SOCKS5_V 0x05
-#define SOCKS5_SSL_V 0x06
 
 
 typedef int (*pcheck_auth)(char *uname, char *passwd);
@@ -77,6 +76,9 @@ enum {
 	S_W_REQ,		/* Write authentication */
 	S_R_REQ_ACK,	/* Read authentication ACK */
 	S_W_REQ_ACK,	/* Write authentication ACK */
+
+	S_W_SSL_NEGO, 	/* Read SSL negociation */
+	S_R_SSL_NEGO,	/* Write SSL negociation */
 
 	S_REPLY,		/* Read on a socket, write a another */
 
@@ -113,7 +115,7 @@ typedef struct {
 	int method;	 	/* Authentication method choose, default -1 */
 	int auth; 	 	/* Authenticate flag, default 0 */
 	int connected;	/* Connected flag, default 0 */
-	int listen;		/* Listen flag in bind mode, default 0, 
+	int listen;		/* Listen flag in bind mode, default 0,
 					 * if -1 error when accept */
 	int cmd;		/* Socks command request */
 	char uname[256];
@@ -188,7 +190,7 @@ typedef struct {
 		if (k == 0) { break; } /* Need to write again */	\
 		init_buffer(buf); \
 	})
-	
+
 #define READ_DISP(k, soc, buf, minsize) \
 	({ \
 		k = read_socks(soc, buf, minsize); \
@@ -212,10 +214,10 @@ void init_socks(s_socks *s, int id, int mode);
 
 void close_socket(s_socket *s);
 
-/* From here packet definition used to manipulate packet 
+/* From here packet definition used to manipulate packet
  * ---------------------------------------------------------------------
  */
- 
+
  /* Socks5 version packet */
 typedef struct {
 	char ver;

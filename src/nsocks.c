@@ -1,21 +1,21 @@
 /*
  *      nsocks.c
- * 
+ *
  * 		Netcat like who pass through a socks5
- * 
+ *
  *      Created on: 2011-04-12
  *      Author:     Hugo Caron
  *      Email:      <h.caron@codsec.com>
- * 
+ *
  * Copyright (C) 2011 by Hugo Caron
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  *
@@ -44,73 +44,94 @@ void capte_fin (int sig){
     boucle_princ = 0;
 }
 
-void netcat_like(int soc){
+void netcat_like(s_socket *s){
 
 	/* Catch CTRL-C */
     bor_signal (SIGINT, capte_fin, SA_RESTART);
-    
+
 	int maxfd=0, res;
 	fd_set set_read, set_write;
 	char buf[4096];
 	int buf_a = 0, buf_b = 0, k = 0;
-	
+
 	while (boucle_princ){
 		FD_ZERO (&set_read);
 		FD_ZERO (&set_write);
-		
+
 		FD_SET (0, &set_read);
-		FD_SET (soc, &set_read);
-		if (soc > maxfd) maxfd = soc; /* Fix maxfd */
-		
+		FD_SET (s->soc, &set_read);
+		if (s->soc > maxfd) maxfd = s->soc; /* Fix maxfd */
+
 		if ( buf_b - buf_a > 0 ){
-			FD_SET (soc, &set_write);
+			FD_SET (s->soc, &set_write);
 		}
-		
+
 		res = select (maxfd+1, &set_read, &set_write, NULL, NULL);
         if (res > 0) {  /* Search eligible sockets */
-			
+
 			/* Read on stdin ? */
 			if (FD_ISSET (0, &set_read)){
 				k = read(0, buf+buf_b, sizeof(buf)-buf_b-1);
-				if ( k < 0 ) { perror("read stdin"); close(soc); exit(1); }
+				if ( k < 0 ) { perror("read stdin"); close(s->soc); exit(1); }
 				if ( k == 0 ) { ERROR(L_DEBUG, "client: read 0 bytes on stdin"); boucle_princ = 0; }
 				//printf("client: read %d bytes in stdin\n", k);
-				buf_b += k;			
+				buf_b += k;
 			}
-			
+
 			/* Read on socket ? */
-			if (FD_ISSET (soc, &set_read)){
-				k = read(soc, buf+buf_b, sizeof(buf)-buf_b-1);
-				if ( k < 0 ) { perror("read socket"); close(soc); exit(1); }
+			if (FD_ISSET (s->soc, &set_read)){
+#ifdef HAVE_LIBSSL
+				if ( s->ssl != NULL ){
+					k = SSL_read(s->ssl, buf+buf_b, sizeof(buf)-buf_b-1);
+					if (k < 0){ perror("read socket"); close(s->soc); exit(1); }
+					if (k == 0){ ERROR(L_DEBUG, "client: read 0 bytes!"); boucle_princ = 0; }
+					k = write(1, buf, k);
+					continue;
+				}
+#endif
+				k = read(s->soc, buf+buf_b, sizeof(buf)-buf_b-1);
+				if ( k < 0 ) { perror("read socket"); close(s->soc); exit(1); }
 				if ( k == 0 ) { ERROR(L_DEBUG, "client: read 0 bytes!"); boucle_princ = 0; }
-				//printf("client: read %d bytes in socket\n", k);	
+				//printf("client: read %d bytes in socket\n", k);
 				k = write(1, buf, k);
 			}
-			
+
 			/* Write on socket ? */
-			if(FD_ISSET (soc, &set_write)){
-				k = write(soc, buf+buf_a, buf_b - buf_a);
+			if(FD_ISSET (s->soc, &set_write)){
+#ifdef HAVE_LIBSSL
+				if ( s->ssl != NULL ){
+					k = SSL_write(s->ssl, buf+buf_a, buf_b - buf_a);
+					if (k < 0){perror("write socket"); boucle_princ = 0; }
+					buf_a += k;
+					if ( buf_b - buf_a == 0 ){
+						buf_b = 0;
+						buf_a = 0;
+					}
+					continue;
+				}
+#endif
+				k = write(s->soc, buf+buf_a, buf_b - buf_a);
 				if ( k < 0 ) { perror("write socket"); boucle_princ = 0; }
 				//printf("client: wrote %d bytes on socket\n", k);
 				buf_a += k;
 				if ( buf_b - buf_a == 0 ){
 					buf_b = 0;
-					buf_a = 0;	
+					buf_a = 0;
 				}
-			}		
-			
+			}
+
         } else if ( res == 0){
             /* Timeout */
-                
-        }else if (res < 0) { 
+
+        }else if (res < 0) {
             if (errno == EINTR) ; /* Received signal, it does nothing */
             else { perror ("select"); boucle_princ = 0; }
         }
-	}	
+	}
 }
 
-		
-void netcat_socks(char *sockshost, int socksport, 
+
+void netcat_socks(char *sockshost, int socksport,
 				char *host, int port, int listen,
 				char *uname, char *passwd,
 				int ssl){
@@ -118,19 +139,25 @@ void netcat_socks(char *sockshost, int socksport,
 
 
 	int r = new_socket_with_socks(&s, sockshost, socksport,
-		uname, passwd, host, port, listen, SOCKS5_V, (listen != 0) ? CMD_BIND : CMD_CONNECT);
+		uname, passwd, host, port, listen,
+		SOCKS5_V, ssl,
+		(listen != 0) ? CMD_BIND : CMD_CONNECT);
 
 	if ( r < 1 ){
 		ERROR(L_NOTICE, "client: connection error");
 		exit(1);
 	}
-	
+
 	TRACE(L_VERBOSE, "client: established connection");
-	netcat_like(s.soc);
+	netcat_like(&s);
 	TRACE(L_VERBOSE, "client: close socket ...");
 
-
+#ifdef HAVE_LIBSSL
+	if(s.ssl != NULL) ssl_close(s.ssl);
+#endif /* HAVE_LIBSSL */
 	close(s.soc);
+	ssl_cleaning();
+
 }
 
 struct globalArgs_t {
@@ -146,7 +173,7 @@ struct globalArgs_t {
 
 	char *uname;			// -u option
 	char *passwd;			// -p option
-	
+
 	char *sockshost;		// -s host:port
 	int socksport;
 
@@ -310,10 +337,10 @@ void parseArg(int argc, char *argv[]){
 
 int main (int argc, char *argv[]){
 	parseArg(argc, argv);
-	
+
 	/*if ( globalArgs.listen != 0 )
-		netcat_socks_bind(globalArgs.sockshost, globalArgs.socksport, 
-					"0.0.0.0", globalArgs.listen, 
+		netcat_socks_bind(globalArgs.sockshost, globalArgs.socksport,
+					"0.0.0.0", globalArgs.listen,
 					globalArgs.uname, globalArgs.passwd,
 #ifdef HAVE_LIBSSL
 					globalArgs.ssl);
@@ -321,7 +348,7 @@ int main (int argc, char *argv[]){
 					0);
 #endif
 	else*/
-		netcat_socks(globalArgs.sockshost, globalArgs.socksport, 
+		netcat_socks(globalArgs.sockshost, globalArgs.socksport,
 					globalArgs.host, globalArgs.port, globalArgs.listen,
 					globalArgs.uname, globalArgs.passwd,
 #ifdef HAVE_LIBSSL

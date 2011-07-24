@@ -317,9 +317,9 @@ void parse_arg(int argc, char *argv[]){
 				globalArgs.ssl = 1;
 				globalArgs.certfile = optarg;
 				break;
-			case 'k':
-				globalArgs.ssl = 1;
-				break;
+			/*case 'k':
+				lobalArgs.ssl = 1;
+				break;*/
 #endif
 
 			case 'b':

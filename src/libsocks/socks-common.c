@@ -20,7 +20,7 @@ int write_socks(s_socket *s, s_buffer *buf){
 	int k;
 #ifdef HAVE_LIBSSL
 	if ( s->ssl != NULL ){
-		k = SSL_read(s->ssl, buf->data + buf->b, buf_free(buf));
+		k = SSL_write(s->ssl, buf->data + buf->a, buf_size(buf));
 		if (k < 0){ perror("write socks"); return -1; }
 		buf->a += k;
 		return buf_empty(buf);
@@ -63,9 +63,9 @@ void init_buffer(s_buffer *buf){
 void init_socket(s_socket *s){
 	s->soc = -1;
 	s->con = 0;
-	#ifdef HAVE_LIBSSL
+#ifdef HAVE_LIBSSL
 	s->ssl= NULL;
-	#endif
+#endif
 }
 
 void init_socks(s_socks *s, int id, int mode){
@@ -88,14 +88,14 @@ void init_socks(s_socks *s, int id, int mode){
 			s->state = -1;   	/* Socks state */
 			break;
 	}
-	
+
 	s->version = -1; 	/* Version choose, default -1 */
 	s->method = -1;	 	/* Authentication method choose, default -1 */
 	s->auth = 0; 	 	/* Authenticate flag, default 0 */
 	s->connected = 0;	/* Connected flag, default 0 */
-	s->listen = 0;		/* Listen flag in bind mode, default 0, 
+	s->listen = 0;		/* Listen flag in bind mode, default 0,
 					 * if -1 error when accept */
-	s->cmd = 0;		/* Socks command request */	
+	s->cmd = 0;		/* Socks command request */
 
 	s->uname[0] = 0;
 }
@@ -104,9 +104,9 @@ void init_socks(s_socks *s, int id, int mode){
 void close_socket(s_socket *s){
 	if ( s->soc != -1 ) close(s->soc);
 	s->soc = -1;
-	
-	#ifdef HAVE_LIBSSL
+
+#ifdef HAVE_LIBSSL
 	if ( s->ssl != NULL ) ssl_close(s->ssl);
 	s->ssl= NULL;
-	#endif
+#endif
 }

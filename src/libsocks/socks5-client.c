@@ -1,19 +1,19 @@
 /*
  *      socks5-client.c
- *      
+ *
  *      Created on: 2011-04-11
  *      Author:     Hugo Caron
  *      Email:      <h.caron@codsec.com>
- * 
+ *
  * Copyright (C) 2011 by Hugo Caron
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  *
@@ -62,7 +62,7 @@ void build_version(s_socks *s, s_socks_conf *c, s_buffer *buf)
 
 	memcpy(buf->data, &req, 2);
 	memcpy(buf->data+2, c->config.cli->allowed_method, req.nmethods);
-	
+
 	/* Reset counter and fix b flag */
 	buf->a = 0;
 	buf->b = sizeof(Socks5VersionACK) + req.nmethods;
@@ -91,8 +91,8 @@ int test_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 {
 	Socks5VersionACK res;
 	int j;
-	TRACE(L_DEBUG, "client: testing version ack ...");	
-	
+	TRACE(L_DEBUG, "client: testing version ack ...");
+
 	memcpy(&res, buf->data, sizeof(Socks5VersionACK));
 
 	/* Check the version */
@@ -101,7 +101,7 @@ int test_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 		return -1;
 	}
 	s->version = res.ver;
-	
+
 	/* Check if method is allowed by the client */
 	for (j = 0; j < c->config.cli->n_allowed_method; ++j ){
 		if ( c->config.cli->allowed_method[j] == res.method ){
@@ -109,14 +109,14 @@ int test_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 			break;
 		}
 	}
-	
+
 	/* No valid method find */
 	if ( s->method == -1 ){
-		ERROR(L_VERBOSE, "client: methode not supported", 
-			s->id);	
-		return -2;	
+		ERROR(L_VERBOSE, "client: methode not supported",
+			s->id);
+		return -2;
 	}
-	
+
 	return 0;
 }
 
@@ -149,7 +149,7 @@ int build_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 {
 	Socks5Auth req;
 	char *uname, *passwd;
-	
+
 	init_buffer(buf);
 
 	uname = c->config.cli->username;
@@ -158,8 +158,8 @@ int build_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	if (uname == NULL || passwd == NULL){
 		ERROR(L_NOTICE, "client: need a login/password");
 		return -1;
-	}	
-	
+	}
+
 	/* Build authentication request */
 	req.ver = 0x01; /* subnegociation version (see RFC1929) */
 	req.ulen = (strlen(uname) < sizeof(req.uname)-1) ?
@@ -168,7 +168,7 @@ int build_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	req.plen = (strlen(passwd) < sizeof(req.passwd)-1) ?
 			strlen(passwd) : sizeof(req.passwd)-1;
 	strcpy(req.passwd, passwd);
-	
+
 	memcpy(buf->data, &req, 2);
 	strcpy(&buf->data[2], req.uname);
 	buf->data[2+req.ulen] = req.plen;
@@ -211,17 +211,17 @@ int build_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 int test_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 {
 	Socks5AuthACK res;
-	TRACE(L_DEBUG, "client: testing authentication ack ...");	
+	TRACE(L_DEBUG, "client: testing authentication ack ...");
 
 	memcpy(&res, buf->data, sizeof(Socks5VersionACK));
 	TRACE(L_DEBUG, "client: v0x%x, status 0x%02X", res.ver, res.status);
-	
+
 	/* Testing version of the subnegotiation need to be 0x01 */
 	if (res.ver != 0x01 ) {
 		ERROR(L_NOTICE, "client: authentication need subnegotiation version 0x01");
 		return -1;
 	}
-	
+
 	/* Testing status, if 0x00 indicates success */
 	if ( res.status != 0x00){
 		s->auth = 0;
@@ -229,9 +229,9 @@ int test_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 				"maybe incorrect username/password");
 		return -2;
 	}
-	
+
 	s->auth = 1;
-	
+
 	return 0;
 }
 
@@ -272,17 +272,17 @@ void build_request(s_socks *s, s_socks_conf *c, s_buffer *buf)
 {
 	Socks5Req req;
 	init_buffer(buf);
-	
+
 	TRACE(L_DEBUG, "client: build request packet ...");
-	TRACE(L_DEBUG, "client: try to connect to %s:%d ...", 
+	TRACE(L_DEBUG, "client: try to connect to %s:%d ...",
 		c->config.cli->host,
 		c->config.cli->port);
-	
+
 	/* Set the request */
 	req.ver = s->version;
 
 	req.rsv = 0x00;
-	req.atyp = 0x03;	
+	req.atyp = 0x03;
 
 	char *host;
 	short port;
@@ -310,7 +310,7 @@ void build_request(s_socks *s, s_socks_conf *c, s_buffer *buf)
 	buf->data[sizeof(Socks5Req)] = hostlen;
 	strcpy(&buf->data[sizeof(Socks5Req) + 1], host);
 	memcpy(&buf->data[sizeof(Socks5Req) + 1 + hostlen], &port, 2);
-	
+
 	/* Reset counter and fix b flag */
 	buf->a = 0;
 	buf->b =  sizeof(Socks5Req) + 1 + hostlen + 2;
@@ -359,14 +359,14 @@ void build_request(s_socks *s, s_socks_conf *c, s_buffer *buf)
 int test_request_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 {
 	Socks5ReqACK res;
-	
+
 	TRACE(L_DEBUG, "client: testing request ack ...");
 
 	memcpy(&res, buf->data, sizeof(Socks5ReqACK));
-	
-	TRACE(L_DEBUG, "client: v0x%x, rep 0x%x, rsv 0x%x, atyp 0x%x", 
+
+	TRACE(L_DEBUG, "client: v0x%x, rep 0x%x, rsv 0x%x, atyp 0x%x",
 	res.ver, res.rep, res.rsv, res.atyp);
-	
+
 
 	if ( res.rep != 0x00){
 		ERROR(L_VERBOSE, "client: socks request ack error!");
@@ -429,21 +429,20 @@ int dispatch_client_write(s_socket *soc, s_socks *socks,
 		case S_W_VER:
 			if ( buf_empty(buf) )
 				build_version(socks, conf, buf);
-			
+
 			WRITE_DISP(k, soc, buf);
 			socks->state = S_R_VER_ACK;
-
 			break;
-			
+
 		case S_W_AUTH:
 			WRITE_DISP(k, soc, buf);
 			socks->state = S_R_AUTH_ACK;
 			break;
-			
+
 		case S_W_REQ:
 			WRITE_DISP(k, soc, buf);
 			socks->state = S_R_REQ_ACK;
-			break;		
+			break;
 
 		case S_REPLY:
 			k = write_socks(soc, buf);
@@ -564,7 +563,7 @@ void dispatch_client(s_client *client, fd_set *set_read, fd_set *set_write)
 	if (client->soc.soc != -1 && FD_ISSET (client->soc.soc, set_read))
 		k = dispatch_client_read(&client->soc, &client->soc_stream,
 				&client->socks, &client->buf, &client->stream_buf, client->conf);
-	else if (client->soc.soc != -1 && 
+	else if (client->soc.soc != -1 &&
 			FD_ISSET (client->soc.soc, set_write))
 		k = dispatch_client_write(&client->soc, &client->socks, &client->buf, client->conf);
 
@@ -636,7 +635,7 @@ void init_select_client (s_socket *soc, s_socks *s, s_buffer *buf, int *maxfd,
 				FD_SET(soc->soc, set_read);
 			}
 		}
-		
+
 		if (soc->soc > *maxfd) *maxfd = soc->soc;
 	}
 }
@@ -696,11 +695,11 @@ int new_socket_with_socks(s_socket *s,
 		char *sockshost, int socksport,
 		char *username, char *password,
 		char *host, int port, int listen,
-		int version, int cmd)
+		int version, int ssl, int cmd)
 {
 	int maxfd = 0, res;
 	fd_set set_read, set_write;
-	
+
 	s_socks_conf conf;
 	s_socks_client_config config;
 	conf.config.cli = &config;
@@ -708,7 +707,7 @@ int new_socket_with_socks(s_socket *s,
 	char method[] =  { 0x00, 0x02 };
 	conf.config.cli->n_allowed_method = 2;
 	conf.config.cli->allowed_method = method;
-	
+
 	/* If no username or password  we don't use auth */
 	if ( username == NULL || password == NULL )
 		--conf.config.cli->n_allowed_method;
@@ -723,16 +722,30 @@ int new_socket_with_socks(s_socket *s,
 	conf.config.cli->password = password;
 
 	//memcpy(&conf.config, &config, sizeof(s_socks_serv_cli_config));
-	
+
     s_client c;
 	init_client (&c, 0, M_CLIENT, &conf);
 
-	c.soc.soc = new_client_socket(sockshost, socksport, 
+	c.soc.soc = new_client_socket(sockshost, socksport,
 		&c.soc.adrC, &c.soc.adrS);
 	if ( c.soc.soc < 0 ){
 		return -1;
 	}
-	
+
+#ifdef HAVE_LIBSSL
+	/* Init SSL here
+	 */
+	if (ssl == 1){
+		TRACE(L_DEBUG, "client: socks5 enable ssl ...");
+		c.soc.ssl = ssl_neogiciate_client(c.soc.soc);
+		if ( c.soc.ssl == NULL ){
+			ERROR(L_VERBOSE, "client: ssl error");
+			return -3;
+		}
+		TRACE(L_DEBUG, "client: ssl ok.");
+	}
+#endif /* HAVE_LIBSSL */
+
     /* Select loop */
     while (conf.config.cli->loop  == 1 && c.soc.soc != -1) {
 
@@ -742,18 +755,18 @@ int new_socket_with_socks(s_socket *s,
 
 		/* Adds the socket in read fds */
 		init_select_client(&c.soc, &c.socks, &c.buf, &maxfd, &set_read, &set_write);
-		
+
 		res = select (maxfd+1, &set_read, &set_write, NULL, NULL);
-        if (res > 0) { 
+        if (res > 0) {
             dispatch_client(&c, &set_read, &set_write);
         } else if ( res == 0){
-		
+
         }else if (res < 0) {
             if (errno == EINTR) ; /* Received signal, it does nothing */
             else { perror ("select"); disconnection(&c); return -1; }
         }
 	}
-	
+
 	memcpy(s, &c.soc, sizeof(s_socket));
 	return (c.soc.soc >= 0);
 }

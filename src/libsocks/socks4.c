@@ -63,7 +63,8 @@ int test_request4(s_socks *s, s_socket *stream, s_socket *bind,
 	 */
 	switch(req.cmd){
 		case 0x01: /* TCP/IP Stream connection */
-			stream->soc = new_client_socket_no_ip(req.dstadr, ntohs(req.dstport), &stream->adrC, &stream->adrS);
+			stream->soc = new_client_socket_no_ip(req.dstadr,
+				ntohs(req.dstport), &stream->adrC, &stream->adrS);
 			if ( stream->soc < 0 ){
 				return -3;
 			}

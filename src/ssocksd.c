@@ -1,19 +1,19 @@
 /*
  *      ssocksd.c
- *      
+ *
  *      Created on: 2011-03-30
  *      Author:     Hugo Caron
  *      Email:      <h.caron@codsec.com>
- * 
+ *
  * Copyright (C) 2011 by Hugo Caron
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
  *
@@ -81,7 +81,7 @@ void usage(char *name){
 
 void parseArg(int argc, char *argv[]){
 	int c;
-	
+
 	globalArgsServer.fileauth[0] = 0;
 	globalArgsServer.filelog[0] = 0;
 	globalArgsServer.fileconfig[0] = 0;
@@ -95,7 +95,7 @@ void parseArg(int argc, char *argv[]){
 	globalArgsServer.filekey[0] = 0;
 #endif
 
-	
+
 	while (1){
 		static struct option long_options[] = {
 			{"help",    no_argument,       0, 'h'},
@@ -113,7 +113,7 @@ void parseArg(int argc, char *argv[]){
 			{"log",  required_argument, 0, 'l'},
 			{0, 0, 0, 0}
 		};
-		
+
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
@@ -158,7 +158,7 @@ void parseArg(int argc, char *argv[]){
 			case 'g':
 				globalArgsServer.guest = 1;
 				break;
-				
+
 			case 'p':
 				globalArgsServer.port = atoi(optarg);
 				break;
@@ -166,11 +166,11 @@ void parseArg(int argc, char *argv[]){
 			case 'a':
 				strcpy(globalArgsServer.fileauth, optarg);
 				break;
-				
+
 			case 'l':
 				strcpy(globalArgsServer.filelog, optarg);
 				break;
-				
+
 			case 'f':
 				strcpy(globalArgsServer.fileconfig, optarg);
 				if ( loadConfigFile(optarg, &globalArgsServer) < 0 ){
@@ -185,17 +185,17 @@ void parseArg(int argc, char *argv[]){
 				usage(argv[0]);
 				exit(1);
 				break;
-				
+
 			case 'h':
 				usage(argv[0]);
 				exit(1);
 				break;
-				
+
 			default:
 				abort ();
 		}
 	}
-	
+
 
 	if ( globalArgsServer.filelog[0] != 0 ){
 		open_log(globalArgsServer.filelog);
@@ -240,21 +240,23 @@ void capte_usr1(){
 void capte_sigpipe(){
 	TRACE(L_DEBUG, "server: catch SIGPIPE signal ...");
 }
-void server(int port){
-    int soc_ec = -1, maxfd, res, nc;  
+void server(int port, int ssl){
+    int soc_ec = -1, maxfd, res, nc;
     s_client tc[MAXCLI];
     fd_set set_read;
     fd_set set_write;
     struct sockaddr_in addrS;
     char methods[2];
-    
+
     s_socks_conf conf;
     s_socks_server_config config;
     conf.config.srv = &config;
 
-    char versions[2] = { 0x05, 0x04 };
+	char versions[] = { SOCKS5_V,
+		SOCKS4_V };
+
     config.allowed_version = versions;
-    config.n_allowed_version = 2;
+    config.n_allowed_version = sizeof(versions);
 
     if ( globalArgsServer.fileauth[0] != 0 ){
     	methods[0] = 0x02;
@@ -262,22 +264,20 @@ void server(int port){
     }else{
     	methods[0] = 0x00;
     }
-    
-
 
 
     config.allowed_method = methods;
     config.n_allowed_method = 1;
     config.check_auth = check_auth;
-    
+
     /* Init client tab */
-    for (nc = 0; nc < MAXCLI; nc++) 
+    for (nc = 0; nc < MAXCLI; nc++)
 		init_client (&tc[nc], nc, M_SERVER, &conf);
-    
+
     soc_ec = new_listen_socket (port, 0, &addrS);
     if (soc_ec < 0) goto fin_serveur;
-    
-	
+
+
 	if ( globalArgsServer.daemon == 1 ){
 		TRACE(L_NOTICE, "server: mode daemon ...");
 		if ( daemon(0, 0) != 0 ){
@@ -285,8 +285,8 @@ void server(int port){
 			exit(1);
 		}
 		writePID(PID_FILE);
-	}    
-    
+	}
+
     bor_signal (SIGINT, capte_fin, SA_RESTART);
 
     /* Need in daemon to remove the PID file properly */
@@ -298,27 +298,27 @@ void server(int port){
 
     while (boucle_princ) {
         init_select_server (soc_ec, tc, &maxfd, &set_read, &set_write);
-        
+
         res = select (maxfd+1, &set_read, &set_write, NULL, NULL);
 
         if (res > 0) { /* Search eligible sockets */
-        
+
             if (FD_ISSET (soc_ec, &set_read))
-                new_connection (soc_ec, tc);
-            
+                new_connection (soc_ec, tc, ssl);
+
             for (nc = 0; nc < MAXCLI; nc++){
 				dispatch_server(&tc[nc], &set_read, &set_write);
 			}
-                
+
         } else if ( res == 0){
- 
-        }else if (res < 0) { 
+
+        }else if (res < 0) {
             if (errno == EINTR) ; /* Received signal, it does nothing */
             else { perror ("select"); goto fin_serveur; }
         }
-    }   
+    }
 
-fin_serveur: 
+fin_serveur:
 #ifdef HAVE_LIBSSL
 	if (globalArgsServer.ssl == 1)
 		ssl_cleaning();
@@ -332,6 +332,6 @@ fin_serveur:
 
 int main (int argc, char *argv[]){
 	parseArg(argc, argv);
-	server(globalArgsServer.port);
+	server(globalArgsServer.port, globalArgsServer.ssl);
     exit (0);
 }
