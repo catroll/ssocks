@@ -159,7 +159,7 @@ void server_relay(char *sockshost, int socksport, int port,
         if (res > 0) {  /* Search eligible sockets */
             if (FD_ISSET (soc_ec, &set_read)){
                 nc = new_connection (soc_ec, tc, 0);
-                if ( ssl == 1 )
+                if ( ssl == 1 && nc > -1)
 					tc[nc].soc_stream.want_ssl = 1;
 			}
 
