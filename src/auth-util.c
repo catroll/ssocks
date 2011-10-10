@@ -48,7 +48,6 @@ int ncred = 0;
 int load_auth_file(char *filename){
 	int k;
 	char *line = NULL;
-	size_t len;
 
 	TRACE(L_DEBUG, "auth: open file %s ...", filename);
 	FILE *fp = fopen(filename, "r");
@@ -59,10 +58,10 @@ int load_auth_file(char *filename){
 		return -1;
 	}
 	
-	while(ncred < MAX_AUTH_LOGIN && 
-		getline(&line, &len, fp) != -1 ){
+	while(ncred < MAX_AUTH_LOGIN && !feof(fp) ){
+		//printf("line : %s\n", fp);
 		/* Warn: Potential overflow */
-		k = fscanf(fp, "%[^#:]:%s\n", tcred[ncred].uname, tcred[ncred].passwd);
+		k = fscanf(fp, "%[^#:]:%s", tcred[ncred].uname, tcred[ncred].passwd);
 		if ( k != 2 ){
 			/* Error or comment or blank line */
 			/*TRACE(L_VERBOSE, "auth: file config format error");*/
