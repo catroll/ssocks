@@ -11,13 +11,12 @@ Features:
 	- Daemon mode
 	- Server support bind mode
 	- Socks4 support (if authentication is enable socks4 is disable)
+	- Support choose of interface to bind
 
 ------------------------------------------------------------------------
 TODO:
 	- IPV6 support
 	- UDP support
-	- Interface we want to bind with the server, (actually 
-	listen on all interfaces)
 	- Stock password with a hash ( md5 or sha256 )
 	- GSSAPI auth support ( maybe )
 	- Set number of client max ( actually 255 is in client.h MAXCLI var )
