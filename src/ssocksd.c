@@ -128,7 +128,7 @@ void parseArg(int argc, char *argv[]){
 		/* Detect the end of the options. */
 		if (c == -1)
 			break;
-		/* TODO: Dangerous strcpy here fix this!!! */
+
 		switch (c)	{
 			case 0:
 				/* If this option set a flag, do nothing else now. */
@@ -154,10 +154,12 @@ void parseArg(int argc, char *argv[]){
 				globalArgsServer.ssl = 1;
 				break;
 			case 'c':
-				strcpy(globalArgsServer.filecert, optarg);
+				strncpy_s(globalArgsServer.filecert, optarg, 
+					sizeof(globalArgsServer.filecert));
 				break;
 			case 'k':
-				strcpy(globalArgsServer.filekey, optarg);
+				strncpy_s(globalArgsServer.filekey, optarg, 
+					sizeof(globalArgsServer.filekey));
 				break;
 #endif
 			case 'g':
@@ -169,19 +171,23 @@ void parseArg(int argc, char *argv[]){
 				break;
 
 			case 'a':
-				strcpy(globalArgsServer.fileauth, optarg);
+				strncpy_s(globalArgsServer.fileauth, optarg, 
+					sizeof(globalArgsServer.fileauth));
 				break;
 			case 'b':
-				strcpy(globalArgsServer.bindAddr, optarg);
+				strncpy_s(globalArgsServer.bindAddr, optarg, 
+					sizeof(globalArgsServer.bindAddr));
 				// globalArgsServer.bindAddr = optarg;
 				break;
 
 			case 'l':
-				strcpy(globalArgsServer.filelog, optarg);
+				strncpy_s(globalArgsServer.filelog, optarg, 
+					sizeof(*globalArgsServer.filelog));
 				break;
 
 			case 'f':
-				strcpy(globalArgsServer.fileconfig, optarg);
+				strncpy_s(globalArgsServer.fileconfig, optarg, 
+					sizeof(globalArgsServer.fileconfig));
 				if ( loadConfigFile(optarg, &globalArgsServer) < 0 ){
 					ERROR(L_NOTICE, "config: config file error");
 					ERROR(L_NOTICE, "server: can't start configuration error");

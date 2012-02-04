@@ -29,6 +29,7 @@
 #define CONFIGD_UTIL__H
 
 #include <config.h>
+#include <string.h>
 
 
 
@@ -36,7 +37,7 @@ struct globalArgsServer_t {
 	char fileauth[255];				// -a option
 	char fileconfig[255];			// -f option
 	char filelog[255];			// -l option
-	char bindAddr[17];                  // -b option
+	char bindAddr[16];                  // -b option
 	unsigned int port;			// -p option
 	unsigned int verbosity;		// -v option
 	unsigned int daemon;		// -d option
@@ -54,5 +55,6 @@ struct globalArgsServer_t {
 int loadConfigFile(char *filename, struct globalArgsServer_t *c);
 int writePID(char *filename);
 int removePID(char *filename);
+char *strncpy_s(char *dest, const char *src, size_t n);
 
 #endif /* CONFIGD_UTIL__H */

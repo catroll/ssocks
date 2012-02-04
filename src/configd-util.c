@@ -42,8 +42,7 @@ int loadConfigFile(char *filename, struct globalArgsServer_t *c){
 	int k;
 	char var[255];
 	char val[255];
-	char *line = NULL;
-	size_t len = 0;
+	char buf[510];
 
 	TRACE(L_DEBUG, "config: open file %s ...", filename);
 
@@ -55,8 +54,12 @@ int loadConfigFile(char *filename, struct globalArgsServer_t *c){
 		return -1;
 	}
 	
-	while(getline(&line, &len, fp) != -1 ){
-		k = sscanf(line, "%[^#=]=%[^\n]\n", var, val);
+	while(!feof(fp)){
+		if(fgets(buf, sizeof(buf), fp) == NULL)
+			break;
+
+		k = sscanf(buf, "%254[^#=]=%254[^\n]\n", var, val);
+
 		//printf("%d\n", k);
 		if ( k != 2 ){
 			//TRACE(L_VERBOSE, "config: file malformated");
@@ -67,22 +70,27 @@ int loadConfigFile(char *filename, struct globalArgsServer_t *c){
 		if(strcasecmp(var, "PORT") == 0 ){
 			c->port = atoi(val);
 		}else if(strcasecmp(var, "AUTH") == 0 ){
-			strcpy(c->fileauth, val);
+			strncpy_s(c->fileauth, val, 
+				sizeof(globalArgsServer.fileauth));
 		}else if(strcasecmp(var, "LOG") == 0 ){
-			strcpy(c->filelog, val);
+			strncpy_s(c->filelog, val, 
+				sizeof(globalArgsServer.filelog));
 		}else if(strcasecmp(var, "DAEMON") == 0 ){
 			c->daemon = atoi(val);
 		}else if(strcasecmp(var, "BIND") == 0 ){
-			strcpy(c->bindAddr, val);
+			strncpy_s(c->bindAddr, val, 
+				sizeof(globalArgsServer.bindAddr));
 		}else if(strcasecmp(var, "VERBOSITY") == 0 ){
 			c->verbosity = atoi(val);
 		}else if(strcasecmp(var, "GUEST") == 0 ){
 			c->guest = atoi(val);
 #ifdef HAVE_LIBSSL
 		}else if(strcasecmp(var, "CERT") == 0 ){
-			strcpy(c->filecert, val);
+			strncpy_s(c->filecert, val, 
+				sizeof(globalArgsServer.filecert));
 		}else if(strcasecmp(var, "KEY") == 0 ){
-			strcpy(c->filekey, val);
+			strncpy_s(c->filekey, val, 
+				sizeof(globalArgsServer.filekey));
 		}else if(strcasecmp(var, "SSL") == 0 ){
 			c->ssl = atoi(val);
 #endif /* HAVE_LIBSSL */
@@ -94,7 +102,6 @@ int loadConfigFile(char *filename, struct globalArgsServer_t *c){
 		TRACE(L_DEBUG, "config: option %s=%s", var, val);		
 	}
 	
-	free(line);
 	TRACE(L_DEBUG, "config: close file");
 	fclose(fp);
 
@@ -160,4 +167,11 @@ void background(){
 	close(STDIN_FILENO);
 	close(STDOUT_FILENO);
 	close(STDERR_FILENO);
+}
+
+/* Fast hack for secure strcpy, to lazy to check if is trully secure */
+char *strncpy_s(char *dest, const char *src, size_t n){
+	dest[n] = 0;
+	char *s = strncpy(dest, src, n-1);
+	return s;
 }
