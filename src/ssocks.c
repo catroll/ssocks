@@ -138,7 +138,7 @@ void server_relay(char *sockshost, int socksport, int port,
 
 
     struct sockaddr_in addrS;
-    soc_ec = new_listen_socket (port, MAXCLI, &addrS);
+    soc_ec = new_listen_socket (NULL, port, MAXCLI, &addrS);
     if (soc_ec < 0) goto fin_serveur;
 
 	if ( globalArgs.background == 1 ){

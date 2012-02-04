@@ -434,7 +434,7 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 			}
 			break;
 		case 0x02: /* TCP/IP port binding */
-			bind->soc = new_listen_socket(port, 10, &bind->adrC);
+			bind->soc = new_listen_socket(NULL, port, 10, &bind->adrC);
 			if ( bind->soc >= 0 ){
 				s->connected = 0;
 				s->listen = 1;

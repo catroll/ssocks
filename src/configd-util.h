@@ -30,10 +30,13 @@
 
 #include <config.h>
 
+
+
 struct globalArgsServer_t {
 	char fileauth[255];				// -a option
 	char fileconfig[255];			// -f option
 	char filelog[255];			// -l option
+	char bindAddr[17];                  // -b option
 	unsigned int port;			// -p option
 	unsigned int verbosity;		// -v option
 	unsigned int daemon;		// -d option

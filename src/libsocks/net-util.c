@@ -77,26 +77,61 @@ int build_addr_server(char *name, int port, struct sockaddr_in *addr){
 	memcpy(&addr->sin_addr.s_addr, hp->h_addr, hp->h_length);
 	return 1;
 }
-/*
- * TODO: Choose what interface bind
- */
-int new_listen_socket (int nport, int backlog, struct sockaddr_in *addrS){
+
+static char* _uitoa(unsigned int n, char (*digits)[21]) {
+	char *p = &(*digits)[sizeof(*digits)-1];
+
+	*p = '\0';
+	do {
+		p--;
+		*p = '0' + (n%10);
+		n = n / 10;
+	} while (n>0);
+
+	return p;
+}
+
+int new_listen_socket (const char *bindAddr, int nport, int backlog, struct sockaddr_in *addrS){
+
     int soc_ec;
-    
-    /* Internet domain socket creation in connected mode */
-    soc_ec = socket (AF_INET, SOCK_STREAM, 0);
-    if (soc_ec < 0) { perror ("socket ip"); return -1; }
+    int error;
+    char portstring[21];
 
-    /* Making local address */
-    addrS->sin_family = AF_INET;
-    addrS->sin_port = htons (nport);      /* 0 for award of a free port */
-    addrS->sin_addr.s_addr = htonl(INADDR_ANY);  /* All Local addresses */
+    struct addrinfo hints = {0,};
+    struct addrinfo *res = NULL;
+    struct addrinfo *rp = NULL;
 
-    /* Attachment socket to the server address */
-    TRACE(L_DEBUG, "server: attachment socket server ...");
-    if (bor_bind_in (soc_ec, addrS) == -1)
-      { close (soc_ec); return -1; }
-      
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = 0;
+    hints.ai_flags = AI_V4MAPPED | AI_ADDRCONFIG | AI_PASSIVE | AI_NUMERICSERV;
+
+    error = getaddrinfo(bindAddr, _uitoa(nport, &portstring), &hints, &res);
+    if (0 != error) {
+	    ERROR(L_NOTICE, "server: resolution error in getaddrinfo: %s\n", gai_strerror(error));
+	    return -1;
+    }
+
+    for (rp = res; rp != NULL; rp = rp->ai_next) {
+	    soc_ec = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+	    if (soc_ec == -1) continue;
+
+	    if (bind(soc_ec, rp->ai_addr, rp->ai_addrlen) == 0) {
+		    memcpy(addrS, rp->ai_addr, sizeof(*addrS));
+		    break;
+	    }
+
+	    close(soc_ec);
+    }
+
+    freeaddrinfo(res);
+    res = NULL;
+
+    if (rp == NULL) {
+	    ERROR(L_NOTICE, "server: could not bind any address.");
+	    return -1;
+    }
+
     /* Recovery of the port as network endian */
     if (bor_getsockname_in (soc_ec, addrS) < 0)
       { perror ("getsockname ip"); close (soc_ec); return -1; }

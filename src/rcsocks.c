@@ -231,11 +231,11 @@ void server_relay(int port, int listen, int ssl){
     	init_client (&tc[nc], nc, 0, NULL);
 
     TRACE(L_NOTICE, "server: set listening client socks relay ...");
-    soc_ec = new_listen_socket (port, MAXCLI, &addrS);
+    soc_ec = new_listen_socket (NULL, port, MAXCLI, &addrS);
     if (soc_ec < 0) goto fin_serveur;
 
     TRACE(L_NOTICE, "server: set server relay ...");
-    soc_ec_cli = new_listen_socket (listen, MAXCLI, &addrS);
+    soc_ec_cli = new_listen_socket (NULL, listen, MAXCLI, &addrS);
     if (soc_ec_cli < 0) goto fin_serveur;
 
 	if ( globalArgs.background == 1 ){

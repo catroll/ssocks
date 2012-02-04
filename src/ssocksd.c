@@ -60,6 +60,8 @@ void usage(char *name){
 
 	printf("Usage:\n");
 	printf("\t%s --port 8080\n", name);
+	printf("\t%s -b 127.0.0.1 --port 8080\n", name);
+	printf("\t%s --address 127.0.0.1 --port 8080\n", name);
 	printf("\t%s -p 8080 -a ssocksd.auth -d\n", name);
 	printf("\t%s -vv\n", name);
 	printf("\n");
@@ -72,6 +74,7 @@ void usage(char *name){
 	printf("\t--daemon   daemon mode (background)\n");
 	printf("\t--verbose  increase verbose level\n\n");
 	printf("\t--port {port}  listening port (default 1080)\n");
+	printf("\t--bind {ip} listening on ip (default all)\n");
 	printf("\t--file {file}  see man 5 ssocksd.conf\n");
 	printf("\t--auth {file}  see man 5 ssocksd.auth\n");
 	printf("\t--log {file}   if set connections are log in this file\n");
@@ -85,6 +88,7 @@ void parseArg(int argc, char *argv[]){
 	globalArgsServer.fileauth[0] = 0;
 	globalArgsServer.filelog[0] = 0;
 	globalArgsServer.fileconfig[0] = 0;
+	globalArgsServer.bindAddr[0] = 0;
 	globalArgsServer.port = DEFAULT_PORT;
 	globalArgsServer.verbosity = 0;
 	globalArgsServer.guest = 1;
@@ -107,6 +111,7 @@ void parseArg(int argc, char *argv[]){
 			{"key",  required_argument, 0, 'k'},
 #endif
 			{"guest",no_argument,       0, 'g'},
+			{"bind", required_argument, 0, 'b'},
 			{"port", required_argument, 0, 'p'},
 			{"file", required_argument, 0, 'f'},
 			{"auth", required_argument, 0, 'a'},
@@ -117,7 +122,7 @@ void parseArg(int argc, char *argv[]){
 		/* getopt_long stores the option index here. */
 		int option_index = 0;
 
-		c = getopt_long (argc, argv, "h?vsgdk:c:f:a:p:l:",
+		c = getopt_long (argc, argv, "h?vsgdk:c:f:a:b:p:l:",
 					long_options, &option_index);
 
 		/* Detect the end of the options. */
@@ -165,6 +170,10 @@ void parseArg(int argc, char *argv[]){
 
 			case 'a':
 				strcpy(globalArgsServer.fileauth, optarg);
+				break;
+			case 'b':
+				strcpy(globalArgsServer.bindAddr, optarg);
+				// globalArgsServer.bindAddr = optarg;
 				break;
 
 			case 'l':
@@ -242,7 +251,8 @@ void capte_usr1(){
 void capte_sigpipe(){
 	TRACE(L_DEBUG, "server: catch SIGPIPE signal ...");
 }
-void server(int port, int ssl){
+
+void server(const char *bindAddr, int port, int ssl){
     int soc_ec = -1, maxfd, res, nc;
     s_client tc[MAXCLI];
     fd_set set_read;
@@ -276,7 +286,11 @@ void server(int port, int ssl){
     for (nc = 0; nc < MAXCLI; nc++)
 		init_client (&tc[nc], nc, M_SERVER, &conf);
 
-    soc_ec = new_listen_socket (port, 0, &addrS);
+	if(bindAddr[0] == 0)
+	    soc_ec = new_listen_socket (NULL, port, 0, &addrS);
+	else
+	    soc_ec = new_listen_socket (bindAddr, port, 0, &addrS);
+
     if (soc_ec < 0) goto fin_serveur;
 
 
@@ -334,6 +348,6 @@ fin_serveur:
 
 int main (int argc, char *argv[]){
 	parseArg(argc, argv);
-	server(globalArgsServer.port, globalArgsServer.ssl);
+	server(globalArgsServer.bindAddr, globalArgsServer.port, globalArgsServer.ssl);
     exit (0);
 }

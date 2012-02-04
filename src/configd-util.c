@@ -72,6 +72,8 @@ int loadConfigFile(char *filename, struct globalArgsServer_t *c){
 			strcpy(c->filelog, val);
 		}else if(strcasecmp(var, "DAEMON") == 0 ){
 			c->daemon = atoi(val);
+		}else if(strcasecmp(var, "BIND") == 0 ){
+			strcpy(c->bindAddr, val);
 		}else if(strcasecmp(var, "VERBOSITY") == 0 ){
 			c->verbosity = atoi(val);
 		}else if(strcasecmp(var, "GUEST") == 0 ){

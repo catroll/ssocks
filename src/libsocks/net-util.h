@@ -37,8 +37,7 @@
 /* Prototypes  */
 int new_socket_tcpip(int port, struct sockaddr_in *addr);
 int build_addr_server(char *name, int port, struct sockaddr_in *addr);
-/*int new_listen_socket (int nport, int maxpend);*/
-int new_listen_socket (int nport, int maxpend, struct sockaddr_in *addrS);
+int new_listen_socket (const char *name, int nport, int maxpend, struct sockaddr_in *addrS);
 int new_client_socket(char *nameS, uint16_t nport,
 		struct sockaddr_in *addrC, struct sockaddr_in *addrS);
 
