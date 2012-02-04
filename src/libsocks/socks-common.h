@@ -100,8 +100,9 @@ typedef struct {
 	int con;  /* Connected flag to used with non blocking connect */
 #ifdef HAVE_LIBSSL
 	SSL *ssl; /* SSL socket */
-	int want_ssl; /* Trick for dynamic mode to know you need ssl*/
 #endif
+	int want_ssl; /* Trick for dynamic mode to know you need ssl*/
+
 	struct sockaddr_in adrS; /* Socket server info */
 	struct sockaddr_in adrC; /* Socket client info */
 } s_socket;
@@ -194,10 +195,12 @@ typedef struct {
 
 #define READ_DISP(k, soc, buf, minsize) \
 	({ \
-		k = read_socks(soc, buf, minsize); \
-		if (k < 0){ /* close_socket(soc); */ break; } /* Error */ \
-		if (k == 0) { break; } /* Need to read again */ \
+		(k) = read_socks(soc, buf, minsize);			\
+		if ((k) < 0){ /* close_socket(soc); */ break; } /* Error */ \
+		if ((k) == 0) { break; } /* Need to read again */	\
 	})
+
+#define PEEK_DISP(buf, minsize) (buf_size((buf)) >= (minsize))
 
 /* Prototypes
  */

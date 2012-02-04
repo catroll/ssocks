@@ -44,14 +44,14 @@ int read_socks(s_socket *s, s_buffer *buf, size_t minsize){
 		if (k < 0){ perror("read socks"); return -1; }
 		if (k == 0){ return -1; }
 		buf->b += k;
-		return ( buf->b >= minsize );
+		return (buf->b >= minsize);
 	}
 #endif
 	k = read(s->soc, buf->data + buf->b, buf_free(buf));
 	if (k < 0){ perror("read socks"); return -2; }
 	if (k == 0){ return -1; }
 	buf->b += k;
-	return k;
+	return (buf->b >= minsize);
 }
 
 void init_buffer(s_buffer *buf){

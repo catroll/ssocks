@@ -84,6 +84,9 @@ socket don't close properly
  Just for remember (this by default actually)
  $ ./configure --enable-static --disable-shared
  
+PS: for test and debug authentication
+ $ curl -U admin:abcde --socks5 127.0.0.1:1080 www.perdu.com
+
 ------------------------------------------------------------------------
 Copyright (C) 2011 by Hugo Caron
 

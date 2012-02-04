@@ -88,9 +88,9 @@ void parseArg(int argc, char *argv[]){
 	globalArgsServer.port = DEFAULT_PORT;
 	globalArgsServer.verbosity = 0;
 	globalArgsServer.guest = 1;
+	globalArgsServer.ssl = 0;
 
 #ifdef HAVE_LIBSSL
-	globalArgsServer.ssl = 0;
 	globalArgsServer.filecert[0] = 0;
 	globalArgsServer.filekey[0] = 0;
 #endif

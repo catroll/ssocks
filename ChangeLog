@@ -1,3 +1,9 @@
-2011/24/07
+2012/02/04
+	* Fix server read buffer corruption in Socks5Req thx to init-js
+	* Fix authentication error
+	* Fix issue with SSL
+	* Release version v0.0.12
+
+2011/07/24
 	* Add some SSL support but no time to debug the software
 	* Try SSL on all soft seem ok

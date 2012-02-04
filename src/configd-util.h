@@ -37,8 +37,8 @@ struct globalArgsServer_t {
 	unsigned int port;			// -p option
 	unsigned int verbosity;		// -v option
 	unsigned int daemon;		// -d option
-#ifdef HAVE_LIBSSL
 	unsigned int ssl;			// -s option
+#ifdef HAVE_LIBSSL
 	char filecert[255];			// -c option
 	char filekey[255];			// -k option
 #endif

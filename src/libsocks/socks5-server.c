@@ -46,7 +46,6 @@
  * Return:
  * 	-1, error wrong version
  * 	-2, error wrong method
- *  -3, error ssl
  * 	 0, success
  *
  * From RFC1928:
@@ -214,11 +213,23 @@ int test_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 		ERROR(L_NOTICE, "server [%d]: username too long",
 			s->id);
 		req.ulen = sizeof(req.uname)-1;
+
+		ERROR(L_VERBOSE, "server [%d]: authentication NOK!", 
+			s->id);
+		s->auth = 0;
+
+		return 0;
 	}
 	if ( (unsigned int)req.plen > sizeof(req.passwd)-1){
 		ERROR(L_NOTICE, "server [%d]: password  too long",
 			s->id);
 		req.plen = sizeof(req.passwd)-1;
+
+		ERROR(L_VERBOSE, "server [%d]: authentication NOK!", 
+			s->id);
+		s->auth = 0;
+		
+		return 0;
 	}
 
 	/* Extract username and fix NULL byte */
@@ -299,8 +310,9 @@ void build_auth_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 /* Test request packet in buf, and execute the request
  *
  * Return:
- * 	-1, error, wrong atyp
- * 	-2, error, wrong cmd
+ * 	-EINVAL, invalid argument (typ, cmd, udp)
+ *      -EAGAIN, expects more bytes in buffer
+ *      -1, other error
  * 	 0, success
  *
  * From RFC1928:
@@ -339,7 +351,7 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 	uint16_t port = 0, *p;
 	char domain[256];
 	char chAddr[4];
-	char l;
+	uint8_t l;
 	struct in_addr addr;
 	/* Rebuild the packet but don't extract
 	 * DST.ADDR and DST.PORT in Socks5Req struct */
@@ -359,26 +371,33 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 	 */
 	switch ( req.atyp ){
 		case 0x03: /* Domain name */
+
+			if (!PEEK_DISP(buf, sizeof(Socks5Req) + 1)) return -EAGAIN;
+
 			/* First byte is the domain len */
-			l = *(buf->data + sizeof(Socks5Req)) ;
+			l = *(buf->data + sizeof(Socks5Req));
+
+			/* 1 addrlen + l domain + 2 port */
+			if (!PEEK_DISP(buf, sizeof(Socks5Req) + 1 + l + 2)) return -EAGAIN;
 
 			/* Copy the domain name and blank at end
 			 * little cheat to avoid overflow (dangerous here) */
-			strncpy(domain, buf->data + sizeof(Socks5Req) + 1,
-					( l < sizeof(domain) ) ? l : sizeof(domain)-1 );
-			domain[(int)l] = 0;
+			memcpy(domain, buf->data + sizeof(Socks5Req) + 1, l);
+			domain[(int)l] = '\0';
 
 			/* After domain we have the port
 			 * big endian on 2 bytes*/
-			p = (uint16_t*)(buf->data + sizeof(Socks5Req) + l  + 1) ;
+			p = (uint16_t*)(buf->data + sizeof(Socks5Req) + l + 1) ;
 			port = ntohs(*p);
 
 			TRACE(L_DEBUG, "Server [%d]: asking for %s:%d", s->id, domain, port);
 			break;
 
 		case 0x01: /* IP address */
-			memcpy(&chAddr, (buf->data + sizeof(Socks5Req)),
-					sizeof(chAddr));
+			
+			if (!PEEK_DISP(buf, sizeof(Socks5Req) + sizeof(chAddr) + 2)) return -EAGAIN;
+
+			memcpy(&chAddr, (buf->data + sizeof(Socks5Req)), sizeof(chAddr));
 			inet_aton(chAddr, &addr);
 
 			/* After domain we have the port
@@ -392,7 +411,7 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 			ERROR(L_NOTICE, "server [%d]: support domain name "\
 								"and ipv4 only",
 				s->id);
-			return -1;
+			return -EINVAL;
 	}
 
 
@@ -411,7 +430,7 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 			else
 				stream->soc = new_client_socket_no(domain, port, &stream->adrC, &stream->adrS);
 			if ( stream->soc < 0 ){
-				return -3;
+				return -1;
 			}
 			break;
 		case 0x02: /* TCP/IP port binding */
@@ -427,7 +446,7 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 		default :
 			ERROR(L_NOTICE, "server [%d]: don't support udp",
 				s->id);
-			return -2;
+			return -EINVAL;
 	}
 
 	return 0;
@@ -719,8 +738,8 @@ int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind
 		case S_R_VER:
 			READ_DISP(k, soc, buf, 3);
 
-			k = test_version(socks, conf,
-								buf);
+			k = test_version(socks, conf, buf);
+
 			if (k < 0){ /* close_socket(soc); */ break; } /* Error */
 			if ( socks->version == SOCKS4_V ){
 				k = test_request4(socks,
@@ -759,8 +778,8 @@ int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind
 				READ_DISP(k, soc, buf,
 					sizeof(Socks5Req)  + 4);
 				soc_stream->soc = new_client_socket(conf->config.cli->sockshost,
-									conf->config.cli->socksport,
-									&adrC, &adrS);
+								    conf->config.cli->socksport,
+								    &adrC, &adrS);
 
 				if ( soc_stream->soc < 0 ){
 					ERROR(L_NOTICE, "client: connection to socks5 server impossible!");
@@ -785,12 +804,12 @@ int dispatch_server_read(s_socket *soc, s_socket *soc_stream, s_socket *soc_bind
 				socks->state = S_WAIT;
 				break;
 			}
-			READ_DISP(k, soc, buf,
-				sizeof(Socks5Req)  + 4);
 
-			k = analyse_request(socks,
-								soc_stream, soc_bind,
-								conf, buf);
+			READ_DISP(k, soc, buf, sizeof(Socks5Req));
+
+			k = analyse_request(socks, soc_stream, soc_bind, conf, buf);
+			if (k == -EAGAIN) { k=0; break; }
+
 			init_buffer(buf);
 			if (k < 0){ break; } /* Error */
 

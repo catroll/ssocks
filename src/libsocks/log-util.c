@@ -38,7 +38,7 @@ int open_log(char *filename){
 	
 	fpLog = fopen(filename, "a+");
 	if ( fpLog == 0 ){
-		perror("fopen");
+		perror("fopen log file");
 		return -1;
 	}
 

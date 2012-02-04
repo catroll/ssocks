@@ -33,3 +33,4 @@ stamp-h.in
 .deps
 *.exe
 .libs
+*.orig
