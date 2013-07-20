@@ -112,7 +112,7 @@ int test_version_ack(s_socks *s, s_socks_conf *c, s_buffer *buf)
 
 	/* No valid method find */
 	if ( s->method == -1 ){
-		ERROR(L_VERBOSE, "client: methode not supported",
+		ERROR(L_VERBOSE, "client: method not supported",
 			s->id);
 		return -2;
 	}

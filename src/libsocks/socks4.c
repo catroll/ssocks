@@ -79,7 +79,7 @@ int test_request4(s_socks *s, s_socket *stream, s_socket *bind,
 			break;
 		/* TODO: udp support */
 		default :
-			ERROR(L_NOTICE, "server [%d]: don't support udp",
+			ERROR(L_NOTICE, "server [%d]: doesn't support udp",
 				s->id);
 			return -2;
 	}

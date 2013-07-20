@@ -221,7 +221,7 @@ int test_auth(s_socks *s, s_socks_conf *c, s_buffer *buf)
 		return 0;
 	}
 	if ( (unsigned int)req.plen > sizeof(req.passwd)-1){
-		ERROR(L_NOTICE, "server [%d]: password  too long",
+		ERROR(L_NOTICE, "server [%d]: password too long",
 			s->id);
 		req.plen = sizeof(req.passwd)-1;
 
@@ -444,7 +444,7 @@ int analyse_request(s_socks *s, s_socket *stream, s_socket *bind,
 			break;
 		/* TODO: udp support */
 		default :
-			ERROR(L_NOTICE, "server [%d]: don't support udp",
+			ERROR(L_NOTICE, "server [%d]: doesn't support udp",
 				s->id);
 			return -EINVAL;
 	}

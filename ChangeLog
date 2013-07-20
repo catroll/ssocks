@@ -1,3 +1,6 @@
+2013/07/20
+	* Fix typo/grammar/spelling (thx to Benjamin Kerensa for the patch https://twitter.com/bkerensa)
+
 2012/02/04
 	* Release version v0.0.13
 	* Remove getline, remove some dangerous strcpy in config file and param
